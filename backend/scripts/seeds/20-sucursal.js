@@ -1,6 +1,7 @@
-// Una sucursal de ejemplo (Casa Matriz, con venta web habilitada para que el stock sume a stock_total_web).
+// La casa matriz, en San Bernardo, con venta web habilitada para que el stock sume a stock_total_web.
+// La dirección no se carga aquí: se completa cuando se conozca.
 export default async function sembrar(db) {
   await db.query(
-    `INSERT INTO sucursal (nombre, direccion, comuna_id, habilita_venta_web)
-     SELECT 'Casa Matriz', 'Av. Libertador B. O''Higgins 1000', id, TRUE FROM comuna WHERE nombre = 'Santiago'`);
+    `INSERT INTO sucursal (nombre, comuna_id, habilita_venta_web)
+     SELECT 'Casa Matriz', id, TRUE FROM comuna WHERE nombre = 'San Bernardo'`);
 }

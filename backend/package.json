@@ -10,7 +10,9 @@
     "crear-admin": "node scripts/crear-admin.js",
     "dev:db": "node scripts/dev-db.js",
     "dev:local": "node --env-file=.env.local --watch src/server.js",
-    "migrar:local": "node scripts/migrar.js"
+    "migrar:local": "node scripts/migrar.js",
+    "datos-prueba": "node scripts/datos-prueba.js",
+    "datos-prueba:local": "node scripts/cargar-datos-prueba.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
