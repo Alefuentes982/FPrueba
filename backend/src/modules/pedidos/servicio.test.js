@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { estadoSchema, pagosSchema, pedidoSchema } from './esquemas.js';
+import { accionesDisponibles, codigoPedido, ESTADO } from './servicio.js';
+
+const id = (n) => `00000000-0000-4000-8000-00000000000${n}`;
+const base = { sucursal_id: id(1), nombre_cliente: 'Ana Pérez', items: [{ producto_id: id(2), cantidad: 2 }] };
+
+test('codigoPedido da formato PED-000123', () => {
+  assert.equal(codigoPedido(7), 'PED-000007');
+});
+
+test('acciones por estado', () => {
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.PENDIENTE, reservado: false }), ['editar', 'reservar', 'pagar', 'cancelar']);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.PENDIENTE, reservado: true }), ['editar', 'pagar', 'cancelar']);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.PAGADO, reservado: true }), ['cancelar', 'estado:En preparación']);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.PREPARACION, reservado: true }), ['cancelar', 'estado:Listo para retiro', 'estado:En despacho']);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.DESPACHO, reservado: true }), ['estado:Entregado']);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.ENTREGADO, reservado: true }), []);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.CANCELADO, reservado: false }), []);
+  assert.deepEqual(accionesDisponibles({ estado: ESTADO.EXPIRADO, reservado: false }), []);
+});
+
+test('pedidoSchema valida cliente y líneas', () => {
+  const ok = pedidoSchema.parse(base);
+  assert.equal(ok.reservar, false);
+  assert.equal(ok.telefono, null);
+  assert.equal(pedidoSchema.safeParse({ ...base, nombre_cliente: ' ' }).success, false);
+  assert.equal(pedidoSchema.safeParse({ ...base, items: [] }).success, false);
+  assert.equal(pedidoSchema.safeParse({ ...base, items: [{ producto_id: id(2), cantidad: 0 }] }).success, false);
+  assert.equal(pedidoSchema.safeParse({ ...base, items: [{ producto_id: id(2), cantidad: 1 }, { producto_id: id(2), cantidad: 1 }] }).success, false);
+});
+
+test('pagosSchema exige al menos un pago con monto positivo', () => {
+  assert.equal(pagosSchema.safeParse({ pagos: [] }).success, false);
+  assert.equal(pagosSchema.safeParse({ pagos: [{ medio_pago_id: id(3), monto: 0 }] }).success, false);
+  assert.equal(pagosSchema.safeParse({ pagos: [{ medio_pago_id: id(3), monto: 1500 }, { medio_pago_id: id(4), monto: 500 }] }).success, true);
+  assert.equal(estadoSchema.safeParse({ estado: '' }).success, false);
+});

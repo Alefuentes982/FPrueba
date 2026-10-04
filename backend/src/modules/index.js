@@ -12,5 +12,6 @@ import proveedores from './proveedores/index.js';
 import productos from './productos/index.js';
 import ordenesCompra from './ordenes-compra/index.js';
 import inventario from './inventario/index.js';
+import pedidos from './pedidos/index.js';
 
-export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario];
+export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos];
