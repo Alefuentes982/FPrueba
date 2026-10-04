@@ -30,6 +30,7 @@ Cada módulo se entrega por separado (ver `docs/entrega-github.md`) y se registr
 - **Proveedores** — CRUD con validación de RUT. <!-- parte:2 -->
 - **Productos** — CRUD, margen y precio calculado por la base, proveedores por producto. <!-- parte:3 -->
 - **Órdenes de compra** — borrador → emitida → recepción total o parcial (lotes, kardex, PMP), número correlativo, PDF, filtro por fechas. Migración `001`. <!-- parte:4 -->
+- **Inventario** — stock por sucursal con alerta de stock mínimo, lotes y vencimientos (baja de vencidos), kardex con filtros y ajustes/mermas con motivo obligatorio. Migración `002`. <!-- parte:5 -->
 
 ## Acceso y permisos
 Login con Supabase Auth (correo y contraseña); cada cuenta tiene una fila en `usuario` con el mismo id. Cada módulo declara la clave de permiso que exige (tabla `modulo`) y los permisos se leen en cada request, así que quitar uno rige de inmediato. Los módulos con `publico: true` no exigen sesión (login hoy; tienda en línea más adelante).
@@ -40,3 +41,4 @@ Login con Supabase Auth (correo y contraseña); cada cuenta tiene una fila en `u
 - `/proveedores` (GET, GET :id, POST, PUT :id). <!-- parte:2 -->
 - `/productos` (GET, GET :id, GET proveedor/:proveedorId, POST, PUT :id, PATCH :id/activo, PUT :id/proveedores). <!-- parte:3 -->
 - `/ordenes-compra` (GET, GET :id, POST, PUT :id, POST :id/emitir, POST :id/cancelar, POST :id/recibir, GET :id/pdf). Los listados aceptan `desde` y `hasta` (AAAA-MM-DD, días de Chile). El PDF llega como JSON con base64 (los gestores de descarga como IDM interceptan `application/pdf`). Datos de la empresa en el PDF: `EMPRESA_NOMBRE`, `EMPRESA_RUT`, `EMPRESA_DIRECCION`. <!-- parte:4 -->
+- `/inventario/stock` (GET, PUT minimo), `/inventario/lotes` (GET, POST :id/baja-vencido, POST bajas-vencidos), `/inventario/kardex` (GET con filtros y rango de fechas), `/inventario/ajustes` (POST: ajuste positivo, ajuste negativo, merma). El kardex es inmutable: una corrección es un ajuste en sentido contrario. <!-- parte:5 -->

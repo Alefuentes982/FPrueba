@@ -12,3 +12,6 @@ export const hoyIso = (offsetDias = 0) => {
 };
 export const inicioMesIso = () => { const d = new Date(); d.setDate(1); return d.toLocaleDateString('en-CA'); };
 export const isoDate = (v) => (v ? String(v).slice(0, 10) : '');
+export const fechaHora = (v) => (v
+  ? new Date(v).toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' })
+  : '—');
