@@ -54,7 +54,59 @@ git worktree remove ../FarmaClick-parte4      # quitar una
 ```
 Cada una queda como una carpeta junto a la del proyecto. No traen `node_modules`: para ejecutar una, correr `npm install` dentro de `backend/` y `frontend/`.
 
-## 3. Subir el proyecto a un repositorio nuevo de GitHub
+## 3. Dos casos: repositorio compartido o repositorio vacío
+
+- **Repositorio compartido que ya tiene archivos y donde solo el dueño fusiona** (caso del proyecto de título): sección 3A. **No necesita estar vacío.**
+- **Repositorio propio y vacío**: sección 3B.
+
+## 3A. Repositorio compartido con archivos y fusión por el dueño
+
+Idea: el código del sistema va **dentro de una carpeta** del repositorio (aquí, `farmaclick/`), sin tocar los archivos que ya existen. Dentro de esa carpeta quedan `backend/`, `frontend/`, `db/`, `docs/` y el `README.md` del sistema. Cada parte se sube como una **rama con su Pull Request**, y el dueño la fusiona.
+
+Conviene preguntar al dueño dos cosas: (1) el nombre de la carpeta, si hay una convención (se usa `farmaclick/` de ejemplo); (2) si tienes permiso de escritura en el repositorio. Con permiso, se suben las ramas directamente. **Sin permiso**, se hace un *fork* (botón **Fork** en GitHub), se suben las ramas al fork y los Pull Request se abren desde el fork hacia el repositorio compartido. Los comandos son los mismos; solo cambia la URL de `origin`.
+
+### Preparación (una sola vez)
+```bash
+git clone https://github.com/<organizacion>/<repositorio-compartido>.git trabajo-equipo
+cd trabajo-equipo
+git remote add farmaclick "C:/Users/vic20/Desktop/SistemaFarmaClick"   # tu carpeta local del sistema
+git fetch --no-tags farmaclick
+git branch -r                                                           # deben verse farmaclick/parte/0-base, etc.
+```
+- `trabajo-equipo` es una carpeta **nueva**, distinta de la del sistema: es el clon del repositorio compartido.
+- `--no-tags` evita traer las etiquetas `parte-N` al repositorio compartido, donde no corresponden.
+- Si el repositorio compartido usa otra rama principal que `main` (por ejemplo `master`), reemplázala en los comandos.
+
+### Subir cada parte (el ejemplo es la parte 0; las siguientes son iguales)
+```bash
+git fetch origin                                   # trae lo último del repositorio compartido
+git checkout -b parte/0-base origin/main           # rama nueva, partiendo de lo que ya fusionó el dueño
+git rm -r -q --ignore-unmatch farmaclick           # vacía la carpeta (en la parte 0 aún no existe; no pasa nada)
+git read-tree --prefix=farmaclick/ -u farmaclick/parte/0-base   # copia ahí la parte
+git add -A
+git commit                                         # escribe aquí la descripción de la parte (ver sección 4)
+git push origin parte/0-base
+```
+Luego, en GitHub, abre el Pull Request de `parte/0-base` hacia `main` y escribe su descripción. El dueño lo revisa y lo fusiona.
+
+Para la **parte siguiente**, espera a que el dueño fusione la anterior y repite los mismos comandos cambiando el nombre (`parte/1-usuarios`, y en `read-tree` `farmaclick/parte/1-usuarios`). El `git fetch origin` del primer paso trae lo fusionado, así el Pull Request muestra **solo lo que agrega esa parte**. Esto se comprobó en una prueba: con la parte 0 fusionada, el Pull Request de la parte 1 mostró únicamente los 10 archivos de esa parte.
+
+### Si el dueño tarda en fusionar
+Puedes dejar preparadas varias ramas, pero los Pull Request posteriores incluirán también las partes anteriores que aún no se fusionan. Lo más limpio es **un Pull Request a la vez**, en orden. Si quieres adelantar trabajo, arma la rama de la parte siguiente partiendo de la anterior (`git checkout -b parte/1-usuarios parte/0-base`, y luego los tres comandos de `rm`/`read-tree`/`commit`) y, al abrir el Pull Request, elige como destino la rama de la parte anterior; cuando el dueño fusione la anterior, cambia el destino a `main`.
+
+### Qué verifica el dueño al revisar
+- Que los cambios estén **solo dentro de `farmaclick/`** (no se modificó nada de lo que ya había).
+- Que no haya secretos (`.env`, claves). La revisión previa está en la sección 3B.
+- Para ejecutar una parte ya subida: `cd farmaclick/backend && npm install && npm run dev:db`, y el resto del `README.md` de la carpeta `farmaclick/`.
+
+### Cuidados
+- **Las migraciones** viajan con la parte que las necesita, en `farmaclick/db/migraciones/`. En Supabase se ejecutan a mano, en orden.
+- **Los `.gitignore` del sistema** quedan dentro de `farmaclick/` y siguen funcionando (`node_modules`, `.env`, `.pgdata`).
+- **Este comando reemplaza toda la carpeta** `farmaclick/` por el contenido exacto de la parte. Si alguien del equipo editó a mano archivos dentro de esa carpeta en el repositorio compartido, esos cambios se pisarían: avisa antes y se revisa.
+- **No se conserva el historial de commits original** del sistema, porque cada parte entra como un solo commit nuevo en el repositorio compartido. La descripción que escribas en ese commit y en el Pull Request es el registro de la parte.
+- Para ver cómo quedó una parte antes de subirla: `git diff --stat origin/main HEAD` en la rama recién creada.
+
+## 3B. Subir a un repositorio propio y vacío
 
 ### Antes de empezar
 1. Tener git instalado y haber iniciado sesión en GitHub (en la terminal pedirá usuario y un *token* de acceso personal, o se usa GitHub Desktop / el administrador de credenciales de Windows).
@@ -101,7 +153,7 @@ git push origin --tags
 ```
 Las etiquetas `parte-0` … `parte-10` aparecen en GitHub, en **Releases / Tags**.
 
-### Qué no hacer
+### Qué no hacer (repositorio vacío)
 - **No subir `main` local tal cual** (`git push origin main`): llevaría las 11 partes de una vez y se pierde la entrega por módulos.
 - **No usar `--force`** salvo que se entienda para qué; reescribe el historial en GitHub.
 - **No subir partes fuera de orden**: la parte 5 depende de la 4, y así.
@@ -155,7 +207,9 @@ El `README.md` tiene una línea por módulo (con una marca `<!-- parte:N -->`), 
 
 ## 6. Preguntas frecuentes
 
-**¿Puedo subirlo a otro repositorio, distinto al que tenía pensado?** Sí. Basta con apuntar `origin` al nuevo: `git remote set-url origin https://github.com/<usuario>/<otro-repositorio>.git`.
+**¿El repositorio tiene que estar vacío?** No. Si ya tiene archivos y solo el dueño fusiona, usa la sección 3A (el sistema va dentro de una carpeta). Vacío solo hace falta en la 3B.
+
+**¿Puedo subirlo a otro repositorio, distinto al que tenía pensado?** Sí. En 3B basta con apuntar `origin` al nuevo: `git remote set-url origin https://github.com/<usuario>/<otro-repositorio>.git`; en 3A, se clona el otro repositorio.
 
 **¿Puedo subir solo algunas partes y las demás después?** Sí, siempre que sea en orden: primero la 0, luego la 1, y así.
 
