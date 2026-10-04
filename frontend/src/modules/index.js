@@ -4,8 +4,9 @@
 // Sumar un módulo = crear su carpeta y agregarlo aquí.
 import { registrarExtensiones } from '../extensiones.jsx';
 import usuarios from './usuarios/index.jsx';
+import proveedores from './proveedores/index.jsx';
 
-const modulos = [usuarios];
+const modulos = [usuarios, proveedores];
 modulos.forEach((m) => registrarExtensiones(m.nombre, m.extensiones));
 
 export default modulos;

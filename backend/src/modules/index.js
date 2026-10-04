@@ -8,5 +8,6 @@
 // Sumar un módulo = crear su carpeta y agregarlo aquí.
 import auth from './auth/index.js';
 import usuarios from './usuarios/index.js';
+import proveedores from './proveedores/index.js';
 
-export default [auth, usuarios];
+export default [auth, usuarios, proveedores];
