@@ -1,41 +1,164 @@
 # Entrega a GitHub por módulos
 
-El repositorio se sube por partes, una por módulo (ver `hoja-de-ruta.md`). El historial ya viene dividido: cada parte es un commit y tiene su rama y su etiqueta.
+El proyecto se sube a GitHub **por partes, una por módulo** (ver `hoja-de-ruta.md`). Este documento explica cómo está organizado, cómo ver cada parte en la carpeta del proyecto y cómo subirlas paso a paso.
 
-| Parte | Rama | Etiqueta |
-|---|---|---|
-| 0 Base y acceso | `parte/0-base` | `parte-0` |
-| 1 Usuarios y permisos | `parte/1-usuarios` | `parte-1` |
-| 2 Proveedores | `parte/2-proveedores` | `parte-2` |
-| 3 Productos | `parte/3-productos` | `parte-3` |
-| 4 Órdenes de compra | `parte/4-ordenes-compra` | `parte-4` |
-| 5 Inventario | `parte/5-inventario` | `parte-5` |
-| 6 Pedidos | `parte/6-pedidos` | `parte-6` |
-| 7 Caja y venta presencial | `parte/7-pos` | `parte-7` |
-| 8 Devoluciones | `parte/8-devoluciones` | `parte-8` |
-| 9 Cuadratura de caja | `parte/9-cuadratura` | `parte-9` |
-| 10 Dashboards y reportes | `parte/10-dashboards` | `parte-10` |
+## 1. Cómo está organizado
 
-Cada rama contiene las anteriores, así que un Pull Request de `parte/N` hacia `main` muestra solo lo de ese módulo.
+La carpeta del proyecto muestra siempre **un solo estado**: el de la rama en la que se esté. Hoy es `main`, que contiene todas las partes juntas. La separación por módulos **no son subcarpetas**: está en el historial de git.
 
-## Subir la primera parte
+- Cada parte es **un commit** (a veces con algún commit de apoyo, como un `fix` o un `docs`).
+- Cada parte tiene una **rama** `parte/N-nombre` y una **etiqueta** `parte-N` que apuntan a ese punto del historial.
+- Cada rama **contiene las anteriores**: `parte/4-ordenes-compra` tiene las partes 0 a 4. Por eso un Pull Request de la parte N hacia `main` muestra únicamente lo que agrega esa parte.
+
+| Parte | Rama | Etiqueta | Qué agrega |
+|---|---|---|---|
+| 0 Base y acceso | `parte/0-base` | `parte-0` | estructura, esquema de la base, login, permisos, registro de módulos |
+| 1 Usuarios y permisos | `parte/1-usuarios` | `parte-1` | alta y edición de personal, matriz de roles y permisos |
+| 2 Proveedores | `parte/2-proveedores` | `parte-2` | CRUD con validación de RUT |
+| 3 Productos | `parte/3-productos` | `parte-3` | CRUD, margen, proveedores por producto |
+| 4 Órdenes de compra | `parte/4-ordenes-compra` | `parte-4` | borrador, emisión, recepción, PDF, correlativo (migración 001) |
+| 5 Inventario | `parte/5-inventario` | `parte-5` | stock, lotes, vencimientos, kardex, ajustes (migración 002) |
+| 6 Pedidos | `parte/6-pedidos` | `parte-6` | núcleo de venta, reserva de stock, pagos, estados (migración 003) |
+| 7 Caja y venta presencial | `parte/7-pos` | `parte-7` | turnos de caja, venta en el mostrador, cierre ciego |
+| 8 Devoluciones | `parte/8-devoluciones` | `parte-8` | devolución con reembolso, stock y cierre de caja (migración 004) |
+| 9 Cuadratura de caja | `parte/9-cuadratura` | `parte-9` | historial de turnos, revisión, Cierre Z (migración 005) |
+| 10 Dashboards y reportes | `parte/10-dashboards` | `parte-10` | indicadores, informes, exportación CSV y PDF |
+
+## 2. Ver la separación en la carpeta del proyecto
+
+Hay tres formas, de la más simple a la más cómoda.
+
+### a) Cambiar la carpeta a una parte
+```bash
+git checkout parte/4-ordenes-compra   # la carpeta pasa a tener solo las partes 0 a 4
+git checkout main                     # vuelve a tener todo
+```
+- Los módulos posteriores desaparecen de la carpeta mientras estés en esa rama, y vuelven al regresar a `main`.
+- Antes de cambiar de rama, **guarda tus cambios** con un commit (o `git stash`); si no, git puede negarse a cambiar.
+- `node_modules`, `.env` y `backend/.pgdata` no los controla git, así que no se ven afectados.
+
+### b) Ver qué agregó cada parte sin tocar la carpeta
+```bash
+git log --oneline                       # un commit por parte
+git show --stat parte-7                 # archivos que agregó la parte 7
+git diff parte-6 parte-7 --stat         # diferencia entre dos partes
+git diff parte-6 parte-7 -- backend/    # el detalle, solo del backend
+```
+
+### c) Tener varias partes abiertas a la vez, en carpetas separadas
+```bash
+git worktree add ../FarmaClick-parte4 parte-4
+git worktree add ../FarmaClick-parte7 parte-7
+git worktree list                             # ver las carpetas creadas
+git worktree remove ../FarmaClick-parte4      # quitar una
+```
+Cada una queda como una carpeta junto a la del proyecto. No traen `node_modules`: para ejecutar una, correr `npm install` dentro de `backend/` y `frontend/`.
+
+## 3. Subir el proyecto a un repositorio nuevo de GitHub
+
+### Antes de empezar
+1. Tener git instalado y haber iniciado sesión en GitHub (en la terminal pedirá usuario y un *token* de acceso personal, o se usa GitHub Desktop / el administrador de credenciales de Windows).
+2. Crear el repositorio en GitHub: botón **New repository**, **vacío** (sin README, sin `.gitignore`, sin licencia). Si se crea con archivos, el primer `push` fallará por historiales distintos.
+3. Revisar que no vayan secretos:
+   ```bash
+   git ls-files | grep -i env     # solo debe salir .env.example (y .env.local, que es de desarrollo local)
+   ```
+   Si aparece un `.env` real, avisar antes de subir.
+
+### Conectar el repositorio
+Desde la carpeta del proyecto (una sola vez):
 ```bash
 git remote add origin https://github.com/<usuario>/<repositorio>.git
+git remote -v                  # comprobar que quedó bien
+```
+
+### Subir la parte 0 (crea `main` en GitHub)
+```bash
 git push origin parte/0-base:main
 ```
+Esto significa: "sube la rama local `parte/0-base` y llámala `main` en GitHub".
 
-## Subir cada parte siguiente (con Pull Request)
+### Subir cada parte siguiente (con Pull Request)
+Ejemplo con la parte 1; el resto es igual cambiando el nombre de la rama (ver la tabla):
 ```bash
 git push origin parte/1-usuarios
-# En GitHub: abrir un Pull Request de parte/1-usuarios hacia main y fusionarlo.
-git fetch origin && git checkout main && git pull
 ```
-Para subirla directo, sin Pull Request: `git push origin parte/1-usuarios:main`.
+1. En GitHub aparece el aviso **Compare & pull request**; abrir un Pull Request de `parte/1-usuarios` hacia `main`.
+2. Escribir el título y la descripción (ver sección 4) y fusionarlo con **Merge pull request**.
+3. Traer lo fusionado a tu equipo:
+   ```bash
+   git fetch origin
+   git checkout main
+   git pull
+   ```
+   `git pull` puede mostrar un conflicto, porque tu `main` local ya tiene todas las partes y el de GitHub solo algunas. Si pasa, **no resuelvas a ciegas**: avisa y se revisa. Una alternativa que lo evita es no hacer `pull` y seguir subiendo ramas, abriendo cada Pull Request desde la rama siguiente.
 
-`main` local contiene todas las partes; no lo suba hasta terminar. Para la parte siguiente se trabaja en una rama nueva a partir de la última parte entregada.
+Para subir una parte directo a `main`, sin Pull Request: `git push origin parte/1-usuarios:main`. Sirve, pero no deja registro de revisión por módulo.
 
-## Reglas del repositorio
+### Subir las etiquetas (opcional)
+```bash
+git push origin --tags
+```
+Las etiquetas `parte-0` … `parte-10` aparecen en GitHub, en **Releases / Tags**.
+
+### Qué no hacer
+- **No subir `main` local tal cual** (`git push origin main`): llevaría las 11 partes de una vez y se pierde la entrega por módulos.
+- **No usar `--force`** salvo que se entienda para qué; reescribe el historial en GitHub.
+- **No subir partes fuera de orden**: la parte 5 depende de la 4, y así.
+
+## 4. Describir lo que trae cada parte
+
+Sí: lo que se escribe al hacer el commit y al abrir el Pull Request es una descripción de lo que agrega esa parte, y conviene hacerlo. Hay dos lugares.
+
+### El mensaje del commit
+Las partes ya traen su mensaje, con un título y viñetas de lo que incluyen. Se pueden ver con `git show parte-4 --no-patch`. Formato recomendado:
+```
+feat(modulo): resumen corto de lo que agrega
+
+- Qué hace, en una línea por funcionalidad.
+- Cambios en la base de datos (migración NNN), si los hay.
+- Decisiones o reglas que conviene conocer.
+```
+Tipos de mensaje: `feat(módulo)` para funcionalidad nueva, `fix(módulo)` para correcciones, `docs` para documentación.
+
+**Si quieres cambiar el mensaje de una parte ya hecha** (por ejemplo, de la última):
+```bash
+git checkout parte/10-dashboards
+git commit --amend            # abre el editor con el mensaje para modificarlo
+```
+Esto reescribe ese commit: su identificador cambia, y también hay que actualizar la etiqueta (`git tag -f parte-10`) y llevar `main` al nuevo commit. Para partes intermedias es más delicado, porque las ramas posteriores contienen el commit viejo. **Mientras no hayas subido nada a GitHub es seguro, pero pide ayuda para hacerlo**, para no romper la cadena de ramas.
+
+### La descripción del Pull Request
+Es el lugar más cómodo para explicar cada parte a quien revisa, y se puede escribir o editar después sin tocar git. Una plantilla útil:
+```
+## Qué agrega
+- …
+
+## Cómo probarlo
+1. `cd backend && npm test`
+2. …
+
+## Cambios en la base de datos
+Migración `00N_…sql` (ejecutarla en Supabase antes de usar esta parte).
+
+## Dependencias
+Requiere las partes 0 a N-1.
+```
+El `README.md` tiene una línea por módulo (con una marca `<!-- parte:N -->`), que sirve de resumen general del proyecto.
+
+## 5. Reglas del repositorio
 - Nunca subir `.env` ni las claves de Supabase (`SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`). `.env.example` y `.env.local` solo contienen valores de ejemplo y de desarrollo local.
 - Un módulo nuevo = su carpeta en `backend/src/modules/` y `frontend/src/modules/`, una línea en cada registro (`modules/index.js`), su migración numerada en `db/migraciones/` si cambia el esquema, y su línea en el README.
 - Mensajes de commit: `feat(modulo): …`, `fix(modulo): …`, `docs: …`.
 - Al agregar una parte, ejecutar antes `npm test` (backend) y `npm run build` (frontend).
+- Para la parte siguiente se trabaja en una rama nueva a partir de la última parte entregada.
+
+## 6. Preguntas frecuentes
+
+**¿Puedo subirlo a otro repositorio, distinto al que tenía pensado?** Sí. Basta con apuntar `origin` al nuevo: `git remote set-url origin https://github.com/<usuario>/<otro-repositorio>.git`.
+
+**¿Puedo subir solo algunas partes y las demás después?** Sí, siempre que sea en orden: primero la 0, luego la 1, y así.
+
+**Cambié algo en el código después de una parte. ¿Dónde lo guardo?** Haz el commit en la rama de esa parte (o en una rama nueva a partir de ella) y mantén al día `main`. Si no estás seguro, pide ayuda antes: un cambio en una parte intermedia afecta a las ramas posteriores.
+
+**Las migraciones de la base, ¿se suben?** Sí, están en `db/migraciones/` y viajan con la parte que las necesita. En Supabase se ejecutan a mano, en orden, en el editor SQL; en modo local se aplican solas.
