@@ -9,8 +9,9 @@ import productos from './productos/index.jsx';
 import ordenesCompra from './ordenes-compra/index.jsx';
 import inventario from './inventario/index.jsx';
 import pedidos from './pedidos/index.jsx';
+import pos from './pos/index.jsx';
 
-const modulos = [usuarios, proveedores, productos, ordenesCompra, inventario, pedidos];
+const modulos = [usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos];
 modulos.forEach((m) => registrarExtensiones(m.nombre, m.extensiones));
 
 export default modulos;

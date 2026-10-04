@@ -212,6 +212,54 @@ export async function expirarPendientes(db, minutos = 20) {
   return rows.length;
 }
 
+// Venta en mostrador: el cliente se lleva los productos en el acto, así que el pedido pagado pasa directo a "Entregado".
+export async function entregarEnMostrador(db, id) {
+  const p = await bloquearPedido(db, id);
+  if (p.estado !== ESTADO.PAGADO) throw new HttpError(409, 'Solo se entrega un pedido pagado.');
+  if (!p.requiere_turno) throw new HttpError(409, 'Solo las ventas presenciales se entregan en el acto.');
+  await db.query('UPDATE pedido SET estado_pedido_id = $1 WHERE id = $2', [await estadoPedidoId(db, ESTADO.ENTREGADO), id]);
+}
+
+// Productos vendibles con su precio y stock disponible en una sucursal (buscador del pedido y de la caja).
+// Por un canal a distancia solo se ofrecen los de condición de venta permitida online.
+export async function buscarProductosVendibles(db, { sucursalId, q, remoto, limit = 20 }) {
+  const { rows } = await db.query(
+    `SELECT p.id, p.sku, p.nombre, p.precio, c.nombre AS categoria, cv.nombre AS condicion_venta,
+            cv.permite_venta_online, COALESCE(sd.disponible, 0) AS disponible
+       FROM producto p
+       JOIN categoria c ON c.id = p.categoria_id
+       JOIN condicion_venta cv ON cv.id = p.condicion_venta_id
+       LEFT JOIN vw_stock_disponible sd ON sd.producto_id = p.id AND sd.sucursal_id = $1
+      WHERE p.activo AND cv.activa AND (NOT $2::boolean OR cv.permite_venta_online)
+        AND ($3::text IS NULL OR p.sku ILIKE $3 OR p.nombre ILIKE $3)
+      ORDER BY (p.sku ILIKE $4) DESC, (COALESCE(sd.disponible, 0) > 0) DESC, p.nombre LIMIT $5`,
+    [sucursalId ?? null, remoto, q ? `%${q.replace(/[\\%_]/g, '\\$&')}%` : null, q ? q.replace(/[\\%_]/g, '\\$&') : '', Math.min(limit, 50)]);
+  return rows;
+}
+
+// Calcula líneas, descuentos y totales sin guardar nada (la caja lo muestra antes de cobrar). Usa la misma regla y el
+// mismo redondeo que el trigger de la línea, así el total coincide con el del pedido que luego se crea.
+export async function cotizar(db, items) {
+  const lineas = [];
+  for (const it of items) {
+    const reglaId = await reglaAplicable(db, it.producto_id, it.cantidad);
+    const { rows } = await db.query(
+      `SELECT p.id AS producto_id, p.sku, p.nombre, p.precio, r.nombre AS regla,
+              COALESCE(ROUND($2::numeric * p.precio * r.porcentaje_descuento / 100, 0), 0) AS descuento
+         FROM producto p LEFT JOIN regla_descuento r ON r.id = $3 WHERE p.id = $1 AND p.activo`, [it.producto_id, it.cantidad, reglaId]);
+    if (!rows[0]) throw new HttpError(409, 'Uno de los productos ya no está disponible para la venta.');
+    const l = rows[0];
+    lineas.push({
+      producto_id: l.producto_id, sku: l.sku, nombre: l.nombre, cantidad: it.cantidad, precio_unitario: Number(l.precio),
+      descuento: Number(l.descuento), regla: l.regla, subtotal: it.cantidad * Number(l.precio) - Number(l.descuento),
+    });
+  }
+  const bruto = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);
+  const total = lineas.reduce((s, l) => s + l.subtotal, 0);
+  const neto = Math.round(total / 1.19);
+  return { lineas, subtotal_bruto: bruto, descuento_total: bruto - total, total, subtotal_neto: neto, iva: total - neto };
+}
+
 // Pedido completo para la ficha, el comprobante y la caja.
 export async function detallePedido(db, id) {
   const { rows } = await db.query(

@@ -15,12 +15,12 @@ function Layout() {
       <nav className="navbar navbar-expand-md navbar-dark bg-primary mb-4">
         <div className="container">
           <span className="navbar-brand fw-bold"><i className="bi bi-heart-pulse me-2" />FarmaClick</span>
-          <div className="navbar-nav flex-row gap-3 me-auto">
+          <div className="navbar-nav flex-row flex-wrap gap-1 me-auto">
             {entradas.filter((e) => can(e.modulo)).map((e) => (
-              <NavLink key={e.to} to={e.to} className="nav-link"><i className={`bi ${e.icon} me-1`} />{e.label}</NavLink>
+              <NavLink key={e.to} to={e.to} className="nav-link text-nowrap px-2"><i className={`bi ${e.icon} me-1`} />{e.label}</NavLink>
             ))}
           </div>
-          <div className="d-flex align-items-center gap-3 text-white">
+          <div className="d-flex align-items-center gap-3 text-white text-nowrap">
             <span className="small"><i className="bi bi-person-circle me-1" />{user.nombre} · {user.rol}</span>
             <button className="btn btn-sm btn-outline-light" onClick={logout}>Salir</button>
           </div>

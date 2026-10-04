@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { descargarArchivo, verArchivo } from '../../archivos.js';
 import { fechaHora, money } from '../../format.js';
+import PanelPago from '../../components/PanelPago.jsx';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 import { estadoPedidoClase } from './estados.js';
 
@@ -15,8 +16,6 @@ export default function PedidoDetalle() {
   const [actionError, setActionError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [cobrando, setCobrando] = useState(false);
-  const [pagos, setPagos] = useState([]); // { medio_pago_id, monto, codigo_autorizacion }
-  const [recibido, setRecibido] = useState('');
 
   const ejecutar = async (fn, mensaje) => {
     setActionError(null);
@@ -39,27 +38,11 @@ export default function PedidoDetalle() {
   if (!p) return <Spinner />;
 
   const medios = catalogos.data?.medios_pago ?? [];
-  const efectivo = medios.find((m) => m.nombre === 'Efectivo');
-  const total = Number(p.total);
-  const suma = pagos.reduce((s, x) => s + Number(x.monto || 0), 0);
-  const diferencia = Math.round((total - suma) * 100) / 100;
-  const montoEfectivo = pagos.filter((x) => x.medio_pago_id === efectivo?.id).reduce((s, x) => s + Number(x.monto || 0), 0);
-  const vuelto = recibido !== '' && Number(recibido) >= montoEfectivo ? Number(recibido) - montoEfectivo : null;
-
-  const abrirCobro = () => {
-    setPagos([{ medio_pago_id: efectivo?.id ?? medios[0]?.id ?? '', monto: String(total), codigo_autorizacion: '' }]);
-    setRecibido('');
-    setCobrando(true);
-  };
-  const setPago = (i, cambios) => setPagos((l) => l.map((x, j) => (j === i ? { ...x, ...cambios } : x)));
-
   const siguientes = p.acciones.filter((a) => a.startsWith('estado:')).map((a) => a.slice(7));
   const tiene = (a) => p.acciones.includes(a);
 
-  const confirmarPago = () => ejecutar(
-    () => api.post(`/pedidos/${id}/pagos`, {
-      pagos: pagos.map((x) => ({ medio_pago_id: x.medio_pago_id, monto: Number(x.monto), codigo_autorizacion: x.codigo_autorizacion || null })),
-    }),
+  const confirmarPago = (pagos) => ejecutar(
+    () => api.post(`/pedidos/${id}/pagos`, { pagos }),
     `Pago registrado. El pedido ${p.codigo} quedó pagado.`);
 
   return (
@@ -72,7 +55,11 @@ export default function PedidoDetalle() {
             <i className="bi bi-box-seam me-1" />Reservar stock
           </button>
         )}
-        {tiene('pagar') && !cobrando && <button className="btn btn-success" disabled={busy} onClick={abrirCobro}><i className="bi bi-cash-coin me-1" />Registrar pago</button>}
+        {tiene('pagar') && !cobrando && (
+          <button className="btn btn-success" disabled={busy || medios.length === 0} onClick={() => setCobrando(true)}>
+            <i className="bi bi-cash-coin me-1" />Registrar pago
+          </button>
+        )}
         {siguientes.map((s) => (
           <button key={s} className="btn btn-primary" disabled={busy}
             onClick={() => ejecutar(() => api.post(`/pedidos/${id}/estado`, { estado: s }), `Pedido en estado "${s}".`)}>
@@ -140,50 +127,8 @@ export default function PedidoDetalle() {
       </div>
 
       {cobrando && (
-        <div className="card mb-4">
-          <div className="card-body">
-            <h3 className="h5">Registrar pago</h3>
-            {pagos.map((x, i) => (
-              <div className="row g-2 align-items-center mb-2" key={i}>
-                <div className="col-md-3">
-                  <select className="form-select" value={x.medio_pago_id} onChange={(e) => setPago(i, { medio_pago_id: e.target.value })}>
-                    {medios.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                  </select>
-                </div>
-                <div className="col-md-3"><input type="number" min="1" step="1" className="form-control" value={x.monto} onChange={(e) => setPago(i, { monto: e.target.value })} /></div>
-                <div className="col-md-4"><input className="form-control" maxLength={50} placeholder="Código de autorización (opcional)" value={x.codigo_autorizacion} onChange={(e) => setPago(i, { codigo_autorizacion: e.target.value })} /></div>
-                <div className="col-md-2 text-end">
-                  <button type="button" className="btn btn-outline-danger btn-sm" disabled={pagos.length === 1} onClick={() => setPagos((l) => l.filter((_, j) => j !== i))}><i className="bi bi-trash" /></button>
-                </div>
-              </div>
-            ))}
-            <button type="button" className="btn btn-outline-secondary btn-sm mb-3"
-              onClick={() => setPagos((l) => [...l, { medio_pago_id: medios[0]?.id ?? '', monto: diferencia > 0 ? String(diferencia) : '', codigo_autorizacion: '' }])}>
-              <i className="bi bi-plus" /> Agregar medio de pago
-            </button>
-
-            {montoEfectivo > 0 && (
-              <div className="row g-2 align-items-center mb-3">
-                <div className="col-md-3"><label className="col-form-label">Efectivo recibido</label></div>
-                <div className="col-md-3"><input type="number" min="0" step="1" className="form-control" value={recibido} onChange={(e) => setRecibido(e.target.value)} /></div>
-                <div className="col-md-6">{vuelto != null && <span className="fs-5">Vuelto: <strong>{money(vuelto)}</strong></span>}</div>
-              </div>
-            )}
-
-            <div className="d-flex flex-wrap gap-3 align-items-center">
-              <span>Total: <strong>{money(total)}</strong></span>
-              <span>Pagos: <strong>{money(suma)}</strong></span>
-              <span className={diferencia === 0 ? 'text-success' : 'text-danger'}>
-                {diferencia === 0 ? 'Calza con el total' : diferencia > 0 ? `Faltan ${money(diferencia)}` : `Sobran ${money(-diferencia)}`}
-              </span>
-              <div className="ms-auto d-flex gap-2">
-                <button className="btn btn-success" disabled={busy || diferencia !== 0 || pagos.some((x) => !x.medio_pago_id)} onClick={confirmarPago}>{busy ? 'Registrando…' : 'Confirmar pago'}</button>
-                <button className="btn btn-outline-secondary" disabled={busy} onClick={() => setCobrando(false)}>Cancelar</button>
-              </div>
-            </div>
-            <div className="form-text">Si el pedido aún no tiene stock reservado, se reserva al confirmar el pago.</div>
-          </div>
-        </div>
+        <PanelPago total={Number(p.total)} medios={medios} busy={busy} onConfirmar={confirmarPago} onCancelar={() => setCobrando(false)}
+          ayuda="Si el pedido aún no tiene stock reservado, se reserva al confirmar el pago." />
       )}
 
       <h3 className="h5">Pagos</h3>
