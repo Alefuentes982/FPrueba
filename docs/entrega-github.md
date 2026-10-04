@@ -14,6 +14,7 @@ El repositorio se sube por partes, una por módulo (ver `hoja-de-ruta.md`). El h
 | 7 Caja y venta presencial | `parte/7-pos` | `parte-7` |
 | 8 Devoluciones | `parte/8-devoluciones` | `parte-8` |
 | 9 Cuadratura de caja | `parte/9-cuadratura` | `parte-9` |
+| 10 Dashboards y reportes | `parte/10-dashboards` | `parte-10` |
 
 Cada rama contiene las anteriores, así que un Pull Request de `parte/N` hacia `main` muestra solo lo de ese módulo.
 

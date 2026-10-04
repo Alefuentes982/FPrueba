@@ -32,3 +32,5 @@ La venta presencial y la web comparten el mismo modelo (`pedido`, `detalle_pedid
 - Filtros por rango de días con `core/fechas` y `FiltroFechas`, igual que los listados.
 - Exportación con `core/documentos` (PDF) y CSV.
 - Los módulos pueden aportar tarjetas al dashboard mediante los puntos de extensión del frontend (`Slot`), sin que el dashboard los importe.
+- Cada informe se define una vez (`backend/src/modules/dashboard/informes.js`: consulta, columnas, permiso) y de ahí salen la tabla de la pantalla, el CSV y el PDF. Agregar un informe es sumar una entrada a ese catálogo.
+- Una venta es un pedido pagado en adelante (no cuenta pendiente, cancelado ni expirado); las devoluciones se restan en el día en que se hicieron.

@@ -16,5 +16,6 @@ import pedidos from './pedidos/index.js';
 import pos from './pos/index.js';
 import devoluciones from './devoluciones/index.js';
 import cuadratura from './cuadratura/index.js';
+import dashboard from './dashboard/index.js';
 
-export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones, cuadratura];
+export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones, cuadratura, dashboard];

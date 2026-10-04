@@ -1,4 +1,5 @@
 import Cuadratura from './Cuadratura.jsx';
+import TarjetaCaja from './TarjetaCaja.jsx';
 import TurnoDetalle from './TurnoDetalle.jsx';
 
 export default {
@@ -9,4 +10,5 @@ export default {
     { path: '/cuadratura', element: <Cuadratura /> },
     { path: '/cuadratura/:id', element: <TurnoDetalle /> },
   ],
+  extensiones: { 'dashboard.tarjetas': TarjetaCaja },
 };
