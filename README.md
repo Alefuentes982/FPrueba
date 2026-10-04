@@ -25,9 +25,11 @@ Limitación: no hay pg_cron, así que no corren los jobs de expiración de reser
 Cada módulo se entrega por separado (ver `docs/entrega-github.md`) y se registra en `backend/src/modules/index.js` y `frontend/src/modules/index.js`.
 
 - **Base y acceso** — login con Supabase Auth, sesión, permisos por módulo (`rol_permiso`), registro de módulos. <!-- parte:0 -->
+- **Usuarios y permisos** — alta y edición de personal, matriz de roles y permisos. <!-- parte:1 -->
 
 ## Acceso y permisos
 Login con Supabase Auth (correo y contraseña); cada cuenta tiene una fila en `usuario` con el mismo id. Cada módulo declara la clave de permiso que exige (tabla `modulo`) y los permisos se leen en cada request, así que quitar uno rige de inmediato. Los módulos con `publico: true` no exigen sesión (login hoy; tienda en línea más adelante).
 
 ## API (prefijo /api)
 - `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`; el resto exige `Authorization: Bearer <token>`. `GET /catalogos`: listas de apoyo que aporta cada módulo. <!-- parte:0 -->
+- `/usuarios` (GET, GET :id, POST, PUT :id), `/roles` (GET, PUT :id/permisos). <!-- parte:1 -->

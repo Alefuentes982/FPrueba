@@ -7,5 +7,6 @@
 //   catalogos  { nombre: async () => filas } listas de apoyo que se sirven en GET /api/catalogos
 // Sumar un módulo = crear su carpeta y agregarlo aquí.
 import auth from './auth/index.js';
+import usuarios from './usuarios/index.js';
 
-export default [auth];
+export default [auth, usuarios];
