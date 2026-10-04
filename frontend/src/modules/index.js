@@ -5,8 +5,9 @@
 import { registrarExtensiones } from '../extensiones.jsx';
 import usuarios from './usuarios/index.jsx';
 import proveedores from './proveedores/index.jsx';
+import productos from './productos/index.jsx';
 
-const modulos = [usuarios, proveedores];
+const modulos = [usuarios, proveedores, productos];
 modulos.forEach((m) => registrarExtensiones(m.nombre, m.extensiones));
 
 export default modulos;

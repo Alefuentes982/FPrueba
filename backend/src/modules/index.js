@@ -9,5 +9,6 @@
 import auth from './auth/index.js';
 import usuarios from './usuarios/index.js';
 import proveedores from './proveedores/index.js';
+import productos from './productos/index.js';
 
-export default [auth, usuarios, proveedores];
+export default [auth, usuarios, proveedores, productos];
