@@ -15,5 +15,6 @@ import inventario from './inventario/index.js';
 import pedidos from './pedidos/index.js';
 import pos from './pos/index.js';
 import devoluciones from './devoluciones/index.js';
+import cuadratura from './cuadratura/index.js';
 
-export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones];
+export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones, cuadratura];

@@ -42,23 +42,22 @@ export async function pedidoDevolvible(db, pedidoId) {
       WHERE p.id = $1`, [pedidoId]);
   if (!rows[0]) throw notFound('Pedido');
   const p = rows[0];
-  const [lineas, pagado, devuelto] = await Promise.all([
-    db.query(
+  // Secuencial: `db` puede ser un cliente dentro de una transacción, que no admite consultas simultáneas.
+  const lineas = await db.query(
       `SELECT d.id AS detalle_id, d.producto_id, pr.sku, d.nombre_producto, d.cantidad, d.precio_unitario, d.descuento_monto,
               (d.cantidad * d.precio_unitario - d.descuento_monto) AS subtotal,
               COALESCE((SELECT SUM(dd.cantidad) FROM devolucion_detalle dd WHERE dd.detalle_pedido_id = d.id), 0)::int AS devuelto
          FROM detalle_pedido d JOIN producto pr ON pr.id = d.producto_id
-        WHERE d.pedido_id = $1 ORDER BY d.nombre_producto`, [pedidoId]),
-    db.query(
+        WHERE d.pedido_id = $1 ORDER BY d.nombre_producto`, [pedidoId]);
+  const pagado = await db.query(
       `SELECT mp.id AS medio_pago_id, mp.nombre AS medio_pago, SUM(tp.monto) AS pagado
          FROM transaccion_pago tp
          JOIN medio_pago mp ON mp.id = tp.medio_pago_id
          JOIN estado_transaccion et ON et.id = tp.estado_transaccion_id AND et.nombre = 'Aprobado'
-        WHERE tp.pedido_id = $1 GROUP BY mp.id, mp.nombre ORDER BY MIN(tp.fecha_transaccion), mp.nombre`, [pedidoId]),
-    db.query(
+        WHERE tp.pedido_id = $1 GROUP BY mp.id, mp.nombre ORDER BY MIN(tp.fecha_transaccion), mp.nombre`, [pedidoId]);
+  const devuelto = await db.query(
       `SELECT dp.medio_pago_id, SUM(dp.monto) AS devuelto
-         FROM devolucion_pago dp JOIN devolucion d ON d.id = dp.devolucion_id WHERE d.pedido_id = $1 GROUP BY dp.medio_pago_id`, [pedidoId]),
-  ]);
+         FROM devolucion_pago dp JOIN devolucion d ON d.id = dp.devolucion_id WHERE d.pedido_id = $1 GROUP BY dp.medio_pago_id`, [pedidoId]);
   const yaDevuelto = new Map(devuelto.rows.map((x) => [x.medio_pago_id, Number(x.devuelto)]));
   const medios = pagado.rows.map((m) => ({
     medio_pago_id: m.medio_pago_id, medio_pago: m.medio_pago, pagado: Number(m.pagado),
