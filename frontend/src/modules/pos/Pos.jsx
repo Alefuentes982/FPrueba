@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../AuthContext.jsx';
+import { Slot } from '../../extensiones.jsx';
 import { fechaHora, money } from '../../format.js';
 import { ErrorAlert, Spinner, useAsync } from '../../components/ui.jsx';
 import AbrirTurno from './AbrirTurno.jsx';
@@ -60,7 +61,13 @@ export default function Pos() {
           <span className="text-muted"> · abierta desde {fechaHora(t.fecha_apertura)} · efectivo inicial {money(t.monto_apertura_efectivo)}</span>
         </div>
         <div className="d-flex align-items-center gap-3">
-          <span><strong>{t.resumen.ventas}</strong> ventas · <strong>{money(t.resumen.total)}</strong></span>
+          <span>
+            <strong>{t.resumen.ventas}</strong> ventas · <strong>{money(t.resumen.total)}</strong>
+            {t.resumen.devoluciones?.cantidad > 0 && (
+              <span className="text-danger"> · {t.resumen.devoluciones.cantidad} devolución(es) -{money(t.resumen.devoluciones.total)}</span>
+            )}
+          </span>
+          <Slot nombre="pos.acciones" />
           <button className="btn btn-outline-secondary btn-sm" onClick={verVentas}><i className="bi bi-list-ul me-1" />Ventas del turno</button>
           {can('usuarios') && <Link to="/pos/cajas" className="btn btn-outline-secondary btn-sm"><i className="bi bi-gear" /></Link>}
           <button className="btn btn-warning btn-sm" onClick={() => setCerrando(true)}>Cerrar turno</button>

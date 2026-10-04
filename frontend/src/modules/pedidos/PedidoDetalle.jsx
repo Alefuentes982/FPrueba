@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { descargarArchivo, verArchivo } from '../../archivos.js';
+import { Slot } from '../../extensiones.jsx';
 import { fechaHora, money } from '../../format.js';
 import PanelPago from '../../components/PanelPago.jsx';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
@@ -146,6 +147,9 @@ export default function PedidoDetalle() {
           </tbody>
         </table>
       )}
+
+      {/* Otros módulos (p. ej. devoluciones) agregan aquí sus secciones. */}
+      <Slot nombre="pedido.detalle" pedido={p} />
     </>
   );
 }

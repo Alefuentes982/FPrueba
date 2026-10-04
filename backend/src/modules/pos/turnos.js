@@ -13,7 +13,7 @@ export async function turnoAbierto(db, usuarioId) {
 
 // Ventas y cobros del turno. Ventas anuladas (canceladas o expiradas) no cuentan.
 export async function resumenTurno(db, turnoId) {
-  const [ventas, medios] = await Promise.all([
+  const [ventas, medios, devoluciones] = await Promise.all([
     db.query(
       `SELECT COUNT(*)::int AS ventas, COALESCE(SUM(p.total), 0) AS total
          FROM pedido p JOIN estado_pedido e ON e.id = p.estado_pedido_id
@@ -25,8 +25,16 @@ export async function resumenTurno(db, turnoId) {
          JOIN medio_pago mp ON mp.id = tp.medio_pago_id
          JOIN estado_transaccion et ON et.id = tp.estado_transaccion_id AND et.nombre = 'Aprobado'
         WHERE p.turno_caja_id = $1 GROUP BY mp.nombre ORDER BY mp.nombre`, [turnoId]),
+    // Devoluciones hechas desde la caja de este turno; el efectivo devuelto se descuenta del esperado al cerrar.
+    db.query(
+      `SELECT (SELECT COUNT(*)::int FROM devolucion WHERE turno_caja_id = $1) AS cantidad,
+              (SELECT COALESCE(SUM(total_reembolso), 0) FROM devolucion WHERE turno_caja_id = $1) AS total,
+              (SELECT COALESCE(SUM(dp.monto), 0) FROM devolucion d
+                 JOIN devolucion_pago dp ON dp.devolucion_id = d.id
+                 JOIN medio_pago mp ON mp.id = dp.medio_pago_id AND mp.nombre = 'Efectivo'
+                WHERE d.turno_caja_id = $1) AS efectivo`, [turnoId]),
   ]);
-  return { ventas: ventas.rows[0].ventas, total: ventas.rows[0].total, por_medio: medios.rows };
+  return { ventas: ventas.rows[0].ventas, total: ventas.rows[0].total, por_medio: medios.rows, devoluciones: devoluciones.rows[0] };
 }
 
 export async function abrirTurno(db, usuario, { caja_id: cajaId, monto_apertura_efectivo: monto }) {

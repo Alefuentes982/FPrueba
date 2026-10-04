@@ -12,9 +12,10 @@ Orden de construcción y entrega según dependencias. Cada parte debe funcionar 
 | 5 | Inventario | stock por sucursal, lotes, kardex, vencimientos, mermas y ajustes | 3, 4 |
 | 6 | Pedidos | núcleo de venta compartido: pedido, líneas, reserva FEFO, pagos, estados | 3, 5 |
 | 7 | Caja y venta presencial | apertura de turno, venta al público (POS), pago en efectivo y tarjeta, comprobante | 6 |
-| 8 | Cuadratura de caja | cierre del turno (Cierre Z): esperado vs. contado, diferencias | 7 |
-| 9 | Dashboards y reportes | indicadores, ventas, inventario, compras, caja; exportación a CSV y PDF | 4 a 8 |
-| 10 | E-commerce (futuro) | catálogo web, carrito, pago en línea, despacho o retiro | 6 y la API pública |
+| 8 | Devoluciones | devolución de productos de un pedido entregado: reembolso por los medios de pago originales, reingreso opcional de stock, descuenta el efectivo en el cierre de caja, comprobante PDF | 6, 7 |
+| 9 | Cuadratura de caja | historial de turnos, desglose por medio de pago, diferencias y Cierre Z en PDF (el cierre básico ya está en la parte 7) | 7, 8 |
+| 10 | Dashboards y reportes | indicadores, ventas netas de devoluciones, inventario, compras, caja; exportación a CSV y PDF | 4 a 9 |
+| 11 | E-commerce (futuro) | catálogo web, carrito, pago en línea, despacho o retiro | 6 y la API pública |
 
 ## Cómo se prepara la venta en línea desde ahora
 La venta presencial y la web comparten el mismo modelo (`pedido`, `detalle_pedido`, `transaccion_pago`, `canal_venta`); solo cambian el canal y las reglas:
@@ -25,7 +26,7 @@ La venta presencial y la web comparten el mismo modelo (`pedido`, `detalle_pedid
 - **Pagos.** `transaccion_pago` ya prevé pasarela y medio de pago; la caja usa efectivo y tarjeta, la web usará la pasarela.
 - **Documentos.** `core/documentos` (PDF y numeración correlativa) sirve para órdenes de compra, comprobantes de venta y reportes.
 
-## Dashboards y reportes (parte 9)
+## Dashboards y reportes (parte 10)
 - Solo lectura: consultas y vistas SQL; el backend ya tiene SELECT sobre las tablas necesarias.
 - Permiso `dashboard` (ya existe en la tabla `modulo`).
 - Filtros por rango de días con `core/fechas` y `FiltroFechas`, igual que los listados.

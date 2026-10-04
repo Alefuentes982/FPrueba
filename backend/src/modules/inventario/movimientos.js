@@ -28,11 +28,11 @@ export async function bloquearLote(db, loteId) {
   return rows[0];
 }
 
-export async function insertarMovimiento(db, { productoId, sucursalId, cantidad, motivo, loteId, usuarioId, observacion = null }) {
+export async function insertarMovimiento(db, { productoId, sucursalId, cantidad, motivo, loteId, usuarioId, observacion = null, pedidoId = null }) {
   const { rows } = await db.query(
-    `INSERT INTO movimiento_inventario (producto_id, sucursal_id, cantidad, motivo_movimiento_id, lote_id, usuario_id, observacion)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, fecha`,
-    [productoId, sucursalId, cantidad, await motivoId(db, motivo), loteId, usuarioId, observacion]);
+    `INSERT INTO movimiento_inventario (producto_id, sucursal_id, cantidad, motivo_movimiento_id, lote_id, usuario_id, observacion, pedido_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, fecha`,
+    [productoId, sucursalId, cantidad, await motivoId(db, motivo), loteId, usuarioId, observacion, pedidoId]);
   return rows[0];
 }
 
