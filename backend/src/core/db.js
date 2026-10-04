@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import pg from 'pg';
 
+// Las columnas DATE (vencimientos, fechas esperadas) se entregan como texto AAAA-MM-DD: pg las convertiría a un
+// instante en la zona horaria del servidor y el día podría correrse.
+pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v);
+
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
