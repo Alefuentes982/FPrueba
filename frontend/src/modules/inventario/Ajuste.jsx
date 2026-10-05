@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { soloFecha } from '../../format.js';
+import BuscadorProducto from '../../components/BuscadorProducto.jsx';
 import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 import Pestanas from './Pestanas.jsx';
 
@@ -24,13 +25,21 @@ export default function Ajuste() {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  const [producto, setProducto] = useState(null);
+
   const base = useAsync(async () => {
-    const [catalogos, prods] = await Promise.all([api.get('/catalogos'), api.get('/productos?activo=true&limit=500')]);
-    return { sucursales: catalogos.sucursales, motivos: catalogos.motivos_movimiento.filter((m) => m.manual), productos: prods.data };
+    const catalogos = await api.get('/catalogos');
+    return { sucursales: catalogos.sucursales, motivos: catalogos.motivos_movimiento.filter((m) => m.manual) };
   }, []);
 
+  // Desde Stock llega ?producto_id=…: se carga ese producto para dejarlo elegido.
+  useEffect(() => {
+    const id = params.get('producto_id');
+    if (id) api.get(`/productos/${id}`).then(setProducto).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const elegirProducto = (p) => { setProducto(p); setForm((f) => ({ ...f, producto_id: p?.id ?? '' })); };
   const positivo = form.motivo === 'Ajuste positivo';
-  const producto = base.data?.productos.find((p) => p.id === form.producto_id);
   const usaLoteExistente = !positivo || loteModo === 'existente';
 
   // Lotes del producto en la sucursal: los descuentos usan lotes con stock; sumar admite también agotados, nunca vencidos.
@@ -87,11 +96,8 @@ export default function Ajuste() {
             </Field>
           </div>
           <div className="col-md-6">
-            <Field label="Producto">
-              <select className="form-select" required value={form.producto_id} onChange={set('producto_id')}>
-                <option value="">Seleccione…</option>
-                {base.data.productos.map((p) => <option key={p.id} value={p.id}>{p.sku} — {p.nombre}</option>)}
-              </select>
+            <Field label="Producto" hint="Busque por SKU o por nombre.">
+              <BuscadorProducto value={producto} onChange={elegirProducto} />
             </Field>
           </div>
           <div className="col-md-6">
@@ -154,7 +160,7 @@ export default function Ajuste() {
         </Field>
 
         <div className="d-flex gap-2">
-          <button className="btn btn-primary" disabled={saving}>{saving ? 'Registrando…' : 'Registrar movimiento'}</button>
+          <button className="btn btn-primary" disabled={saving || !form.producto_id}>{saving ? 'Registrando…' : 'Registrar movimiento'}</button>
           <Link to="/inventario" className="btn btn-outline-secondary">Cancelar</Link>
         </div>
       </form>
