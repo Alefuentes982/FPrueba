@@ -216,9 +216,11 @@ r.post('/:id/recibir', async (req, res) => {
   res.json(await getOrden(pool, req.params.id));
 });
 
-// PDF para enviar al proveedor (JSON con el archivo en base64). Un Borrador o una orden cancelada llevan sello para que no se confundan con una emitida.
+// PDF para enviar al proveedor (JSON con el archivo en base64). Muestra el estado actual de la orden; una orden en
+// borrador, cancelada o con recepción (total o parcial) lleva además un sello para que no se confunda con una emitida.
 r.get('/:id/pdf', async (req, res) => {
   const o = await getOrden(pool, req.params.id);
+  const conRecepcion = ['Recibida parcial', 'Recibida'].includes(o.estado); // el PDF muestra lo recibido por línea
   const doc = generarDocumentoPdf({
     titulo: 'ORDEN DE COMPRA',
     codigo: o.codigo,
@@ -229,6 +231,7 @@ r.get('/:id/pdf', async (req, res) => {
     metadatos: [
       ['Fecha de emisión', fechaDMA(o.fecha)],
       ['Entrega esperada', fechaDMA(o.fecha_esperada)],
+      ['Estado', o.estado],
       ['Emitida por', o.usuario],
     ],
     partes: [
@@ -236,9 +239,10 @@ r.get('/:id/pdf', async (req, res) => {
       { titulo: 'Entregar en', lineas: [o.sucursal, o.sucursal_direccion, o.sucursal_telefono && `Tel. ${o.sucursal_telefono}`] },
     ],
     columnas: [
-      { header: 'SKU', key: 'sku', ancho: 0.15 },
-      { header: 'Producto', key: 'producto', ancho: 0.37 },
-      { header: 'Cantidad', key: 'cantidad', ancho: 0.1, alinear: 'right' },
+      { header: 'SKU', key: 'sku', ancho: conRecepcion ? 0.13 : 0.15 },
+      { header: 'Producto', key: 'producto', ancho: conRecepcion ? 0.31 : 0.37 },
+      { header: conRecepcion ? 'Pedido' : 'Cantidad', key: 'cantidad', ancho: conRecepcion ? 0.09 : 0.1, alinear: 'right' },
+      ...(conRecepcion ? [{ header: 'Recibido', key: 'recibido', ancho: 0.09, alinear: 'right' }] : []),
       { header: 'Costo unit. neto', key: 'costo', ancho: 0.18, alinear: 'right' },
       { header: 'Subtotal neto', key: 'subtotal', ancho: 0.2, alinear: 'right' },
     ],
@@ -246,11 +250,12 @@ r.get('/:id/pdf', async (req, res) => {
       sku: i.sku,
       producto: i.producto,
       cantidad: i.cantidad_solicitada,
+      recibido: i.cantidad_recibida,
       costo: clp(i.costo_unitario),
       subtotal: clp(i.cantidad_solicitada * Number(i.costo_unitario)),
     })),
     totales: [['Neto', clp(o.subtotal_neto)], ['IVA 19%', clp(o.iva)], ['Total', clp(o.total)]],
-    sello: o.estado === 'Borrador' ? 'BORRADOR' : o.estado === 'Cancelada' ? 'ANULADA' : null,
+    sello: { Borrador: 'BORRADOR', Cancelada: 'ANULADA', Recibida: 'RECIBIDA', 'Recibida parcial': 'PARCIAL' }[o.estado] ?? null,
   });
   // Se entrega como JSON (base64) y no como application/pdf: los gestores de descarga (IDM y similares) interceptan
   // cualquier respuesta PDF a nivel de red, la vuelven a pedir sin la sesión y el archivo llega vacío. El
