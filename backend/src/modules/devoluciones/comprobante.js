@@ -5,6 +5,7 @@ import { detalleDevolucion } from './servicio.js';
 // (los gestores de descarga como IDM interceptan application/pdf).
 export async function comprobanteDevolucion(db, id) {
   const d = await detalleDevolucion(db, id);
+  const redondeo = Number(d.redondeo ?? 0); // ajuste del efectivo devuelto (Ley 20.956)
   const doc = generarDocumentoPdf({
     titulo: 'COMPROBANTE DE DEVOLUCIÓN',
     codigo: d.codigo,
@@ -24,7 +25,10 @@ export async function comprobanteDevolucion(db, id) {
       { header: 'Reembolso', key: 'monto', ancho: 0.28, alinear: 'right' },
     ],
     filas: d.lineas.map((l) => ({ sku: l.sku, producto: l.nombre_producto, cantidad: l.cantidad, monto: clp(l.monto_reembolso) })),
-    totales: [['Total devuelto', clp(d.total_reembolso)]],
+    totales: [
+      ['Total devuelto', clp(d.total_reembolso)],
+      ...(redondeo ? [['Ajuste por redondeo (Ley 20.956)', `${redondeo < 0 ? '-' : '+'}${clp(Math.abs(redondeo))}`], ['Dinero devuelto', clp(Number(d.total_reembolso) + redondeo)]] : []),
+    ],
     nota: `Motivo: ${d.motivo}. Dinero devuelto por: ${d.pagos.map((x) => `${x.medio_pago} ${clp(x.monto)}`).join(', ')}. Documento no tributario.`,
   });
   const pdf = await pdfABuffer(doc);

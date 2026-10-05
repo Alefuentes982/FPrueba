@@ -4,6 +4,7 @@ import { api } from '../../api.js';
 import { descargarArchivo, verArchivo } from '../../archivos.js';
 import { useAuth } from '../../AuthContext.jsx';
 import { fechaHora, money } from '../../format.js';
+import { textoAjuste } from '../../redondeo.js';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function TurnoDetalle() {
@@ -117,6 +118,9 @@ export default function TurnoDetalle() {
                 <tr key={m.medio_pago}><td>{m.medio_pago}</td><td className="text-end">{money(m.ventas)}</td>
                   <td className="text-end">{m.devoluciones ? `-${money(m.devoluciones)}` : '—'}</td><td className="text-end">{money(m.ventas - m.devoluciones)}</td></tr>
               ))}
+              {Number(t.resumen.redondeo) !== 0 && (
+                <tr className="text-muted"><td colSpan="3">Ajuste por redondeo del efectivo (Ley 20.956)</td><td className="text-end">{textoAjuste(Number(t.resumen.redondeo), money)}</td></tr>
+              )}
             </tbody>
           </table>
         </>

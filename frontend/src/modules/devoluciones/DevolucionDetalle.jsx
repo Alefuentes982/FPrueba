@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
-import { descargarArchivo, verArchivo } from '../../archivos.js';
+import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { fechaHora, money } from '../../format.js';
+import { textoAjuste } from '../../redondeo.js';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function DevolucionDetalle() {
@@ -18,8 +19,7 @@ export default function DevolucionDetalle() {
   return (
     <>
       <PageHeader title={`Devolución ${d.codigo}`}>
-        <button className="btn btn-outline-secondary" onClick={() => verArchivo(`/devoluciones/${id}/pdf`).catch(setActionError)}><i className="bi bi-eye me-1" />Ver PDF</button>
-        <button className="btn btn-outline-secondary" onClick={() => descargarArchivo(`/devoluciones/${id}/pdf`, `${d.codigo}.pdf`).catch(setActionError)}><i className="bi bi-file-earmark-pdf me-1" />Descargar PDF</button>
+        <BotonesDocumento path={`/devoluciones/${id}/pdf`} nombre={`${d.codigo}.pdf`} onError={setActionError} etiquetaVer="Ver comprobante" />
         <Link to="/devoluciones" className="btn btn-outline-secondary">Volver</Link>
       </PageHeader>
       {aviso && (
@@ -40,7 +40,12 @@ export default function DevolucionDetalle() {
             <dt className="col-sm-4">Motivo</dt><dd className="col-sm-8">{d.motivo}</dd>
           </dl>
         </div>
-        <div className="col-md-5 text-md-end"><div className="fs-4">Total devuelto: <strong>{money(d.total_reembolso)}</strong></div></div>
+        <div className="col-md-5 text-md-end">
+          <div className="fs-4">Total devuelto: <strong>{money(d.total_reembolso)}</strong></div>
+          {Number(d.redondeo) !== 0 && (
+            <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(d.redondeo), money)}</strong> · Dinero devuelto <strong>{money(Number(d.total_reembolso) + Number(d.redondeo))}</strong></div>
+          )}
+        </div>
       </div>
 
       <table className="table align-middle">

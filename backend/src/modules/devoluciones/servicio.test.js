@@ -51,3 +51,34 @@ test('esquemas: el stock no se reingresa por defecto y el motivo es obligatorio'
   assert.equal(devolucionSchema.safeParse({ ...base, items: [] }).success, false);
   assert.equal(cotizacionSchema.safeParse({ pedido_id: id(1), items: [{ detalle_id: id(2), cantidad: 0 }] }).success, false);
 });
+
+// ---- Devolución con redondeo del efectivo (Ley 20.956) ----
+import { distribuirReembolso as distribuir, validarReembolso } from './servicio.js';
+
+const medios = (efectivo, tarjeta) => [
+  { medio_pago_id: 'ef', medio_pago: 'Efectivo', disponible: efectivo },
+  { medio_pago_id: 'tj', medio_pago: 'Débito', disponible: tarjeta },
+];
+
+test('el efectivo se sugiere redondeado y el resto de la devolución va por tarjeta', () => {
+  assert.deepEqual(distribuir(1547, medios(3090, 0)), [{ medio_pago_id: 'ef', monto: 1550 }]);
+  assert.deepEqual(distribuir(3094, medios(3090, 0)), [{ medio_pago_id: 'ef', monto: 3090 }]);
+  assert.deepEqual(distribuir(3094, medios(1000, 3094)), [{ medio_pago_id: 'ef', monto: 1000 }, { medio_pago_id: 'tj', monto: 2094 }]);
+});
+
+test('el efectivo devuelto nunca pasa de lo disponible en efectivo', () => {
+  assert.deepEqual(distribuir(1547, medios(1540, 0)), [{ medio_pago_id: 'ef', monto: 1540 }]);
+});
+
+test('validarReembolso calcula el redondeo y exige el efectivo redondeado', () => {
+  const m = medios(3090, 0);
+  assert.equal(validarReembolso({ total: 3094, reembolsos: [{ medio_pago_id: 'ef', monto: 3090 }], medios: m }), -4);
+  assert.equal(validarReembolso({ total: 1547, reembolsos: [{ medio_pago_id: 'ef', monto: 1550 }], medios: m }), 3);
+  assert.throws(() => validarReembolso({ total: 3094, reembolsos: [{ medio_pago_id: 'ef', monto: 3094 }], medios: m }), /efectivo a devolver es \$3\.090/);
+});
+
+test('validarReembolso: sin efectivo calza exacto; con tope disponible se respeta', () => {
+  assert.equal(validarReembolso({ total: 2094, reembolsos: [{ medio_pago_id: 'tj', monto: 2094 }], medios: medios(0, 2094) }), 0);
+  assert.throws(() => validarReembolso({ total: 2094, reembolsos: [{ medio_pago_id: 'tj', monto: 2090 }], medios: medios(0, 2094) }), /suman \$2\.090/);
+  assert.equal(validarReembolso({ total: 1547, reembolsos: [{ medio_pago_id: 'ef', monto: 1540 }], medios: medios(1540, 0) }), -7);
+});

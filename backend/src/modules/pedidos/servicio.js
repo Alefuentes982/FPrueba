@@ -9,6 +9,7 @@
 import { pool } from '../../core/db.js';
 import { HttpError, notFound } from '../../core/errors.js';
 import { formatoNumero } from '../../core/documentos.js';
+import { aCentavos, aPesos, pesos, redondearEfectivo } from '../../core/redondeo.js';
 
 export const ESTADO = {
   PENDIENTE: 'Pago pendiente', PAGADO: 'Pagado', PREPARACION: 'En preparación', RETIRO: 'Listo para retiro',
@@ -149,21 +150,44 @@ export async function reservarPedido(db, id) {
   await reservarStock(db, id);
 }
 
+// Reparto de un cobro entre medios de pago con el redondeo del efectivo (Ley 20.956). Los montos llegan en pesos.
+//   - Sin efectivo, los pagos deben sumar exactamente el total.
+//   - Con efectivo, lo que no se pagó por otros medios es el valor a cobrar en efectivo y lo recibido en efectivo
+//     debe ser ese valor redondeado al múltiplo de $10 más cercano. La diferencia es el `redondeo` del pedido.
+// Devuelve el redondeo en pesos, o lanza el error que corresponda.
+export function validarCobro({ total, pagos, efectivoId }) {
+  const totalC = aCentavos(total);
+  const esEfectivo = (x) => x.medio_pago_id === efectivoId;
+  const efectivoC = pagos.filter(esEfectivo).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const otrosC = pagos.filter((x) => !esEfectivo(x)).reduce((s, x) => s + aCentavos(x.monto), 0);
+  if (!pagos.some(esEfectivo)) {
+    if (otrosC !== totalC) throw new HttpError(409, `Los pagos suman ${pesos(aPesos(otrosC))} y el pedido es de ${pesos(aPesos(totalC))}.`);
+    return 0;
+  }
+  const valorEfectivoC = totalC - otrosC; // lo que falta por cobrar, antes del redondeo
+  if (valorEfectivoC <= 0) throw new HttpError(409, `Los otros medios ya cubren ${pesos(aPesos(otrosC))} de ${pesos(aPesos(totalC))}: no corresponde cobrar en efectivo.`);
+  const esperadoC = redondearEfectivo(valorEfectivoC);
+  if (esperadoC <= 0) {
+    throw new HttpError(409, `El saldo de ${pesos(aPesos(valorEfectivoC))} se redondea a $0 en efectivo: páguelo con otro medio.`);
+  }
+  if (efectivoC !== esperadoC) {
+    throw new HttpError(409, `El efectivo a cobrar es ${pesos(aPesos(esperadoC))} (${pesos(aPesos(valorEfectivoC))} redondeado según la Ley 20.956) y se informaron ${pesos(aPesos(efectivoC))}.`);
+  }
+  return aPesos(esperadoC - valorEfectivoC);
+}
+
 // Registra el pago (aprobado) y pasa el pedido a "Pagado". Reserva el stock si aún no lo estaba, de modo que la
-// caja pueda crear, reservar y cobrar en una sola transacción.
+// caja pueda crear, reservar y cobrar en una sola transacción. El efectivo se redondea (ver validarCobro).
 export async function registrarPagos(db, id, pagos) {
   const p = await bloquearPedido(db, id);
   if (p.estado !== ESTADO.PENDIENTE) throw new HttpError(409, 'Solo se paga un pedido en "Pago pendiente".');
-  const total = Math.round(Number(p.total) * 100);
-  if (total <= 0) throw new HttpError(409, 'El pedido no tiene monto que cobrar.');
-  const suma = pagos.reduce((s, x) => s + Math.round(x.monto * 100), 0);
-  if (suma !== total) {
-    throw new HttpError(409, `Los pagos suman $${(suma / 100).toLocaleString('es-CL')} y el pedido es de $${(total / 100).toLocaleString('es-CL')}.`);
-  }
-  const { rows: medios } = await db.query('SELECT id FROM medio_pago WHERE activo AND id = ANY($1::uuid[])', [pagos.map((x) => x.medio_pago_id)]);
+  if (aCentavos(p.total) <= 0) throw new HttpError(409, 'El pedido no tiene monto que cobrar.');
+  const { rows: medios } = await db.query('SELECT id, nombre FROM medio_pago WHERE activo AND id = ANY($1::uuid[])', [pagos.map((x) => x.medio_pago_id)]);
   if (new Set(medios.map((m) => m.id)).size !== new Set(pagos.map((x) => x.medio_pago_id)).size) {
     throw new HttpError(400, 'Medio de pago no válido o inactivo.');
   }
+  const efectivoId = medios.find((m) => m.nombre === 'Efectivo')?.id ?? null;
+  const redondeo = validarCobro({ total: p.total, pagos, efectivoId });
   if (!(await stockReservado(db, id))) await reservarStock(db, id);
   const aprobado = await db.query("SELECT id FROM estado_transaccion WHERE nombre = 'Aprobado'");
   if (!aprobado.rows[0]) throw new HttpError(500, 'Falta el estado de transacción "Aprobado".');
@@ -172,7 +196,7 @@ export async function registrarPagos(db, id, pagos) {
       `INSERT INTO transaccion_pago (pedido_id, medio_pago_id, estado_transaccion_id, monto, codigo_autorizacion)
        VALUES ($1,$2,$3,$4,$5)`, [id, x.medio_pago_id, aprobado.rows[0].id, x.monto, x.codigo_autorizacion ?? null]);
   }
-  await db.query('UPDATE pedido SET estado_pedido_id = $1 WHERE id = $2', [await estadoPedidoId(db, ESTADO.PAGADO), id]);
+  await db.query('UPDATE pedido SET redondeo = $1, estado_pedido_id = $2 WHERE id = $3', [redondeo, await estadoPedidoId(db, ESTADO.PAGADO), id]);
 }
 
 export async function cambiarEstado(db, id, nuevo) {
@@ -263,7 +287,7 @@ export async function cotizar(db, items) {
 // Pedido completo para la ficha, el comprobante y la caja.
 export async function detallePedido(db, id) {
   const { rows } = await db.query(
-    `SELECT p.id, p.numero, p.fecha, p.subtotal_bruto, p.total, p.subtotal_neto, p.iva,
+    `SELECT p.id, p.numero, p.fecha, p.subtotal_bruto, p.total, p.subtotal_neto, p.iva, p.redondeo,
             p.nombre_cliente, p.telefono, p.direccion_pedido, p.comuna_id, c.nombre AS comuna,
             e.nombre AS estado, p.estado_pedido_id, cv.nombre AS canal, cv.requiere_turno,
             p.sucursal_id, s.nombre AS sucursal, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,

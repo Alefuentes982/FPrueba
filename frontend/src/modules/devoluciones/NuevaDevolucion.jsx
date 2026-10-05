@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { fechaHora, money } from '../../format.js';
+import { redondearEfectivo, textoAjuste } from '../../redondeo.js';
 import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function NuevaDevolucion() {
@@ -53,10 +54,20 @@ export default function NuevaDevolucion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clave, p?.id]);
 
-  const sumaReembolsos = Object.values(reembolsos).reduce((s, v) => s + Number(v || 0), 0);
   const total = cot?.total ?? 0;
-  const diferencia = Math.round((total - sumaReembolsos) * 100) / 100;
-  const hayEfectivo = p?.medios.some((m) => m.medio_pago === 'Efectivo' && Number(reembolsos[m.medio_pago_id] || 0) > 0);
+  // El efectivo se devuelve redondeado al múltiplo de $10 (Ley 20.956), sin pasar de lo disponible en efectivo; lo que no
+  // se devuelve por otros medios es el valor a devolver en efectivo. El backend valida con la misma regla.
+  const medioEfectivo = p?.medios.find((m) => m.medio_pago === 'Efectivo');
+  const efectivoIngresado = Number(reembolsos[medioEfectivo?.medio_pago_id] || 0);
+  const otrosMedios = (p?.medios ?? []).filter((m) => m !== medioEfectivo).reduce((s, m) => s + Number(reembolsos[m.medio_pago_id] || 0), 0);
+  const hayEfectivo = efectivoIngresado > 0;
+  const valorEfectivo = Math.round((total - otrosMedios) * 100) / 100;
+  const efectivoEsperado = hayEfectivo ? Math.min(redondearEfectivo(valorEfectivo), medioEfectivo.disponible) : null;
+  const redondeo = hayEfectivo && efectivoEsperado > 0 ? Math.round((efectivoEsperado - valorEfectivo) * 100) / 100 : 0;
+  const diferencia = hayEfectivo ? 0 : Math.round((total - otrosMedios) * 100) / 100; // sin efectivo, debe calzar exacto
+  const efectivoOk = !hayEfectivo || (valorEfectivo > 0 && efectivoEsperado > 0 && efectivoIngresado === efectivoEsperado);
+  const calza = diferencia === 0 && efectivoOk;
+  const dineroDevuelto = total + redondeo;
   const motivo = [motivoTipo, motivoDetalle.trim()].filter(Boolean).join(' — ');
 
   const confirmar = async () => {
@@ -69,7 +80,7 @@ export default function NuevaDevolucion() {
         motivo,
         reembolsos: Object.entries(reembolsos).filter(([, v]) => Number(v) > 0).map(([medio_pago_id, v]) => ({ medio_pago_id, monto: Number(v) })),
       });
-      navigate(`/devoluciones/${d.id}`, { state: { aviso: `Devolución ${d.codigo} registrada: ${money(d.total_reembolso)} devueltos.` } });
+      navigate(`/devoluciones/${d.id}`, { state: { aviso: `Devolución ${d.codigo} registrada: ${money(Number(d.total_reembolso) + Number(d.redondeo))} devueltos.` } });
     } catch (e) {
       setError(e);
       setBusy(false);
@@ -177,17 +188,22 @@ export default function NuevaDevolucion() {
                         </div>
                       </div>
                     ))}
-                    <div className={diferencia === 0 ? 'text-success' : 'text-danger'}>
-                      {diferencia === 0 ? 'Calza con el total' : diferencia > 0 ? `Faltan ${money(diferencia)}` : `Sobran ${money(-diferencia)}`}
+                    <div className={calza ? 'text-success' : 'text-danger'}>
+                      {calza ? 'Calza con el total'
+                        : hayEfectivo ? (efectivoEsperado > 0 ? `El efectivo a devolver es ${money(efectivoEsperado)}` : 'Ese saldo se redondea a $0 en efectivo: devuélvalo por otro medio.')
+                          : diferencia > 0 ? `Faltan ${money(diferencia)}` : `Sobran ${money(-diferencia)}`}
                     </div>
+                    {hayEfectivo && redondeo !== 0 && efectivoOk && (
+                      <div className="form-text">Efectivo redondeado según la Ley 20.956 ({textoAjuste(redondeo, money)}): se entregan {money(dineroDevuelto)} en total.</div>
+                    )}
                     {hayEfectivo && <div className="form-text">La parte en efectivo sale de la caja de su turno abierto y se descuenta en el cierre.</div>}
                   </div>
                 </div>
               )}
 
               <div className="d-flex gap-2 mt-4">
-                <button className="btn btn-primary" disabled={busy || !cot || diferencia !== 0 || motivo.length < 3}
-                  onClick={() => window.confirm(`¿Registrar la devolución por ${money(total)}? No se puede deshacer.`) && confirmar()}>
+                <button className="btn btn-primary" disabled={busy || !cot || !calza || motivo.length < 3}
+                  onClick={() => window.confirm(`¿Registrar la devolución por ${money(dineroDevuelto)}? No se puede deshacer.`) && confirmar()}>
                   {busy ? 'Registrando…' : 'Registrar devolución'}
                 </button>
                 {cot && motivo.length < 3 && <span className="align-self-center text-muted small">Elija el motivo para continuar.</span>}

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, qs } from '../../api.js';
-import { descargarArchivo, verArchivo } from '../../archivos.js';
+import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { fechaHora, money } from '../../format.js';
+import { textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
 import { ErrorAlert } from '../../components/ui.jsx';
 
@@ -111,11 +112,13 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
           <i className="bi bi-check-circle text-success display-4" />
           <h2 className="h3 mt-2">Venta {p.codigo} registrada</h2>
           <div className="fs-2 fw-bold">{money(p.total)}</div>
+          {Number(p.redondeo) !== 0 && (
+            <div className="text-muted">Redondeo del efectivo (Ley 20.956): {textoAjuste(Number(p.redondeo), money)} · Total cobrado <strong>{money(Number(p.total) + Number(p.redondeo))}</strong></div>
+          )}
           {hecha.vuelto != null && hecha.vuelto > 0 && <div className="fs-3 text-primary">Vuelto: {money(hecha.vuelto)}</div>}
           <div className="text-muted mb-4">{p.pagos.map((x) => `${x.medio_pago} ${money(x.monto)}`).join(' · ')}</div>
           <div className="d-flex gap-2 justify-content-center">
-            <button className="btn btn-outline-secondary" onClick={() => verArchivo(`/pos/ventas/${p.id}/pdf`).catch(setError)}><i className="bi bi-eye me-1" />Ver comprobante</button>
-            <button className="btn btn-outline-secondary" onClick={() => descargarArchivo(`/pos/ventas/${p.id}/pdf`, `${p.codigo}.pdf`).catch(setError)}><i className="bi bi-file-earmark-pdf me-1" />Descargar</button>
+            <BotonesDocumento path={`/pos/ventas/${p.id}/pdf`} nombre={`${p.codigo}.pdf`} onError={setError} etiquetaVer="Ver comprobante" />
             <button className="btn btn-primary" autoFocus onClick={nuevaVenta}>Nueva venta</button>
           </div>
           <ErrorAlert error={error} />

@@ -7,6 +7,7 @@ export async function comprobantePedido(db, id) {
   const p = await detallePedido(db, id);
   const cliente = [p.nombre_cliente, p.telefono && `Tel. ${p.telefono}`, p.direccion_pedido, p.comuna].filter(Boolean);
   const pagado = p.pagos.filter((x) => x.estado === 'Aprobado');
+  const redondeo = Number(p.redondeo ?? 0); // ajuste del efectivo (Ley 20.956)
   const doc = generarDocumentoPdf({
     titulo: 'COMPROBANTE DE PEDIDO',
     codigo: p.codigo,
@@ -35,6 +36,7 @@ export async function comprobantePedido(db, id) {
       ['Subtotal', clp(p.subtotal_bruto)],
       ...(p.descuento_total ? [['Descuentos', `-${clp(p.descuento_total)}`]] : []),
       ['Neto', clp(p.subtotal_neto)], ['IVA 19%', clp(p.iva)], ['Total', clp(p.total)],
+      ...(redondeo ? [['Ajuste por redondeo (Ley 20.956)', `${redondeo < 0 ? '-' : '+'}${clp(Math.abs(redondeo))}`], ['Total pagado', clp(Number(p.total) + redondeo)]] : []),
     ],
     nota: pagado.length
       ? `Pagado con: ${pagado.map((x) => `${x.medio_pago} ${clp(x.monto)}`).join(', ')}. Documento no tributario.`

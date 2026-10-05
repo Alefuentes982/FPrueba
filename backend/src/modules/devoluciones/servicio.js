@@ -7,13 +7,13 @@
 //  - El stock vuelve al inventario solo si la línea lo indica, y siempre al lote de origen.
 import { formatoNumero } from '../../core/documentos.js';
 import { HttpError, notFound } from '../../core/errors.js';
+import { aCentavos, aPesos, pesos, redondearEfectivo } from '../../core/redondeo.js';
 import { bloquearProducto, insertarMovimiento } from '../inventario/movimientos.js';
 import { bloquearPedido, codigoPedido, ESTADO } from '../pedidos/servicio.js';
 import { turnoAbierto } from '../pos/turnos.js';
 
 export const MAX_DIAS = Number(process.env.DEVOLUCION_MAX_DIAS ?? 30);
 export const codigoDevolucion = (n) => formatoNumero('DEV', n);
-const pesos = (n) => `$${Number(n).toLocaleString('es-CL')}`;
 
 // Monto a reembolsar por `devolver` unidades de una línea que ya tiene `devuelto` devueltas.
 export function montoReembolso({ subtotal, cantidad, devuelto, devolver }) {
@@ -21,16 +21,49 @@ export function montoReembolso({ subtotal, cantidad, devuelto, devolver }) {
   return acumulado(devuelto + devolver) - acumulado(devuelto);
 }
 
-// Reparte el total entre los medios con saldo, en el orden recibido (el de pago original).
+// Reparte el total entre los medios con saldo, en el orden recibido (el de pago original). El efectivo se devuelve
+// redondeado al múltiplo de $10 más cercano (Ley 20.956), sin pasar de lo que quedó disponible en efectivo;
+// si ese tope corta el monto, el resto pasa al siguiente medio.
 export function distribuirReembolso(total, medios) {
-  let restante = total;
+  let restante = aCentavos(total);
   const out = [];
   for (const m of medios) {
     if (restante <= 0) break;
-    const monto = Math.min(restante, m.disponible);
-    if (monto > 0) { out.push({ medio_pago_id: m.medio_pago_id, monto }); restante -= monto; }
+    const disponible = aCentavos(m.disponible);
+    let monto;
+    if (m.medio_pago === 'Efectivo') {
+      const redondeado = redondearEfectivo(restante);
+      monto = Math.min(redondeado, disponible);
+      restante = redondeado > disponible ? restante - monto : 0;
+    } else {
+      monto = Math.min(restante, disponible);
+      restante -= monto;
+    }
+    if (monto > 0) out.push({ medio_pago_id: m.medio_pago_id, monto: aPesos(monto) });
   }
   return out;
+}
+
+// Comprueba el reparto del dinero devuelto y calcula el redondeo del efectivo. Sin efectivo, los reembolsos suman
+// exactamente el total; con efectivo, lo que no se devuelve por otros medios es el valor a devolver en efectivo y
+// se entrega redondeado (con el tope de lo disponible en efectivo). Devuelve el redondeo en pesos.
+export function validarReembolso({ total, reembolsos, medios }) {
+  const totalC = aCentavos(total);
+  const efectivo = medios.find((m) => m.medio_pago === 'Efectivo');
+  const efectivoC = reembolsos.filter((x) => x.medio_pago_id === efectivo?.medio_pago_id).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const otrosC = reembolsos.filter((x) => x.medio_pago_id !== efectivo?.medio_pago_id).reduce((s, x) => s + aCentavos(x.monto), 0);
+  if (efectivoC === 0) {
+    if (otrosC !== totalC) throw new HttpError(409, `Los reembolsos suman ${pesos(aPesos(otrosC))} y lo que corresponde devolver es ${pesos(total)}.`);
+    return 0;
+  }
+  const valorC = totalC - otrosC;
+  if (valorC <= 0) throw new HttpError(409, `Los otros medios ya cubren ${pesos(aPesos(otrosC))} de ${pesos(total)}: no corresponde devolver en efectivo.`);
+  const esperadoC = Math.min(redondearEfectivo(valorC), aCentavos(efectivo.disponible));
+  if (esperadoC <= 0) throw new HttpError(409, `El saldo de ${pesos(aPesos(valorC))} se redondea a $0 en efectivo: devuélvalo por otro medio.`);
+  if (efectivoC !== esperadoC) {
+    throw new HttpError(409, `El efectivo a devolver es ${pesos(aPesos(esperadoC))} (${pesos(aPesos(valorC))} redondeado según la Ley 20.956) y se informaron ${pesos(aPesos(efectivoC))}.`);
+  }
+  return aPesos(esperadoC - valorC);
 }
 
 // Pedido con lo que ya se devolvió y lo que aún se puede devolver, por línea y por medio de pago.
@@ -126,10 +159,7 @@ export async function crearDevolucion(db, d, ctx) {
   if (!pedido.devolvible) throw new HttpError(409, pedido.motivo_no_devolvible);
   const cot = cotizarDevolucion(pedido, d.items);
 
-  const suma = d.reembolsos.reduce((s, x) => s + Math.round(x.monto * 100), 0);
-  if (suma !== Math.round(cot.total * 100)) {
-    throw new HttpError(409, `Los reembolsos suman ${pesos(suma / 100)} y lo que corresponde devolver es ${pesos(cot.total)}.`);
-  }
+  const redondeo = validarReembolso({ total: cot.total, reembolsos: d.reembolsos, medios: pedido.medios });
   const porMedio = new Map();
   for (const x of d.reembolsos) porMedio.set(x.medio_pago_id, (porMedio.get(x.medio_pago_id) ?? 0) + x.monto);
   for (const [medioId, monto] of porMedio) {
@@ -144,8 +174,8 @@ export async function crearDevolucion(db, d, ctx) {
   }
 
   const { rows } = await db.query(
-    `INSERT INTO devolucion (pedido_id, usuario_id, turno_caja_id, motivo, total_reembolso) VALUES ($1,$2,$3,$4,$5) RETURNING id, numero`,
-    [d.pedido_id, ctx.usuarioId, turno?.id ?? null, d.motivo, cot.total]);
+    `INSERT INTO devolucion (pedido_id, usuario_id, turno_caja_id, motivo, total_reembolso, redondeo) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, numero`,
+    [d.pedido_id, ctx.usuarioId, turno?.id ?? null, d.motivo, cot.total, redondeo]);
   const { id, numero } = rows[0];
   for (const l of cot.lineas) {
     await db.query(
@@ -167,7 +197,7 @@ export async function crearDevolucion(db, d, ctx) {
 
 export async function detalleDevolucion(db, id) {
   const { rows } = await db.query(
-    `SELECT d.id, d.numero, d.fecha, d.motivo, d.total_reembolso, d.pedido_id, p.numero AS pedido_numero, p.nombre_cliente,
+    `SELECT d.id, d.numero, d.fecha, d.motivo, d.total_reembolso, d.redondeo, d.pedido_id, p.numero AS pedido_numero, p.nombre_cliente,
             s.nombre AS sucursal, s.direccion AS sucursal_direccion, u.nombre AS usuario, d.turno_caja_id
        FROM devolucion d JOIN pedido p ON p.id = d.pedido_id LEFT JOIN sucursal s ON s.id = p.sucursal_id JOIN usuario u ON u.id = d.usuario_id
       WHERE d.id = $1`, [id]);

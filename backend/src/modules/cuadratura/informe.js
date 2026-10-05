@@ -24,7 +24,8 @@ export async function informeTurno(db, id, user) {
       {
         titulo: 'Resumen del turno',
         lineas: [`${t.resumen.ventas} venta(s): ${clp(t.resumen.total_ventas)}`, `${t.resumen.devoluciones} devolución(es): ${clp(t.resumen.total_devoluciones)}`,
-          `Venta neta: ${clp(t.resumen.total_ventas - t.resumen.total_devoluciones)}`],
+          `Venta neta: ${clp(t.resumen.total_ventas - t.resumen.total_devoluciones)}`,
+          ...(t.resumen.redondeo ? [`Redondeo del efectivo (Ley 20.956): ${t.resumen.redondeo < 0 ? '-' : '+'}${clp(Math.abs(t.resumen.redondeo))}`] : [])],
       },
     ],
     columnas: [

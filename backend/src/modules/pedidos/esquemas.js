@@ -17,7 +17,8 @@ export const pedidoSchema = z.object({
   reservar: z.boolean().default(false),
 });
 
-// Pago dividido en uno o más medios; la suma debe calzar exactamente con el total del pedido.
+// Pago dividido en uno o más medios. Sin efectivo la suma calza exacto con el total; el efectivo se informa ya
+// redondeado al múltiplo de $10 (Ley 20.956), lo valida validarCobro en el servicio.
 export const pagosSchema = z.object({
   pagos: z.array(z.object({
     medio_pago_id: uuid,

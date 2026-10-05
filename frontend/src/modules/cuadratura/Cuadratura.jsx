@@ -4,6 +4,7 @@ import { api, qs } from '../../api.js';
 import { useAuth } from '../../AuthContext.jsx';
 import { descargarArchivo } from '../../archivos.js';
 import { fechaHora, money } from '../../format.js';
+import { textoAjuste } from '../../redondeo.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
 import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 
@@ -107,6 +108,9 @@ export default function Cuadratura() {
                       <tr key={m.medio_pago}><td>{m.medio_pago}</td><td className="text-end">{money(m.ventas)}</td>
                         <td className="text-end">{Number(m.devoluciones) ? `-${money(m.devoluciones)}` : '—'}</td><td className="text-end">{money(Number(m.ventas) - Number(m.devoluciones))}</td></tr>
                     ))}
+                    {Number(s.redondeo) !== 0 && (
+                      <tr className="text-muted"><td colSpan="3">Ajuste por redondeo del efectivo (Ley 20.956)</td><td className="text-end">{textoAjuste(Number(s.redondeo), money)}</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>

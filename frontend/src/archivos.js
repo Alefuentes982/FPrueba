@@ -36,3 +36,25 @@ export async function verArchivo(path) {
     throw err;
   }
 }
+
+// Abre el diálogo de impresión del navegador con el documento. El PDF se carga en un marco invisible de la misma
+// página (sin abrir pestañas) y se imprime al terminar de cargar. Si el navegador no deja imprimir desde el marco,
+// se abre el documento en una pestaña, donde basta Ctrl+P.
+export async function imprimirArchivo(path) {
+  const { blob } = await pedirArchivo(path);
+  const url = URL.createObjectURL(blob);
+  const marco = document.createElement('iframe');
+  marco.setAttribute('aria-hidden', 'true');
+  marco.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+  marco.onload = () => {
+    try {
+      marco.contentWindow.focus();
+      marco.contentWindow.print();
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+  marco.src = url;
+  document.body.appendChild(marco);
+  setTimeout(() => { marco.remove(); URL.revokeObjectURL(url); }, 5 * 60_000);
+}

@@ -80,9 +80,10 @@ export async function resumenPeriodo(db, user, f, { desde, hasta }) {
                      COALESCE(SUM(contado - esperado) FILTER (WHERE fecha_cierre IS NOT NULL AND contado > esperado), 0) AS sobrantes,
                      COALESCE(-SUM(contado - esperado) FILTER (WHERE fecha_cierre IS NOT NULL AND contado < esperado), 0) AS faltantes
                 FROM tt`),
-    consulta(`SELECT COUNT(*)::int AS ventas, COALESCE(SUM(p.total), 0) AS total_ventas,
+    consulta(`SELECT COUNT(*)::int AS ventas, COALESCE(SUM(p.total), 0) AS total_ventas, COALESCE(SUM(p.redondeo), 0) AS redondeo_ventas,
                      (SELECT COUNT(*)::int FROM devolucion d WHERE d.turno_caja_id IN (SELECT id FROM tt)) AS devoluciones,
-                     (SELECT COALESCE(SUM(d.total_reembolso), 0) FROM devolucion d WHERE d.turno_caja_id IN (SELECT id FROM tt)) AS total_devoluciones
+                     (SELECT COALESCE(SUM(d.total_reembolso), 0) FROM devolucion d WHERE d.turno_caja_id IN (SELECT id FROM tt)) AS total_devoluciones,
+                     (SELECT COALESCE(SUM(d.redondeo), 0) FROM devolucion d WHERE d.turno_caja_id IN (SELECT id FROM tt)) AS redondeo_devoluciones
                 FROM pedido p JOIN estado_pedido e ON e.id = p.estado_pedido_id
                WHERE p.turno_caja_id IN (SELECT id FROM tt) AND ${NO_ANULADAS}`),
     consulta(`SELECT mp.nombre AS medio_pago,
@@ -105,6 +106,8 @@ export async function resumenPeriodo(db, user, f, { desde, hasta }) {
   return {
     ...turnos.rows[0], ...v,
     ventas_netas: Number(v.total_ventas) - Number(v.total_devoluciones),
+    // Ajuste del efectivo por la Ley 20.956: lo cobrado por medio de pago suma ventas netas + este redondeo.
+    redondeo: Number(v.redondeo_ventas) - Number(v.redondeo_devoluciones),
     por_medio: medios.rows.filter((m) => Number(m.ventas) || Number(m.devoluciones)),
     por_cajero: cajeros.rows,
   };
@@ -136,10 +139,10 @@ export async function detalleTurno(db, id, user) {
                          WHERE dp.medio_pago_id = mp.id AND d.turno_caja_id = $1), 0) AS devoluciones
          FROM medio_pago mp ORDER BY mp.nombre`, [id]),
     db.query(
-      `SELECT p.id, p.numero, p.fecha, p.nombre_cliente, p.total, e.nombre AS estado
+      `SELECT p.id, p.numero, p.fecha, p.nombre_cliente, p.total, p.redondeo, e.nombre AS estado
          FROM pedido p JOIN estado_pedido e ON e.id = p.estado_pedido_id WHERE p.turno_caja_id = $1 ORDER BY p.numero`, [id]),
     db.query(
-      `SELECT d.id, d.numero, d.fecha, d.motivo, d.total_reembolso, ped.numero AS pedido_numero
+      `SELECT d.id, d.numero, d.fecha, d.motivo, d.total_reembolso, d.redondeo, ped.numero AS pedido_numero
          FROM devolucion d JOIN pedido ped ON ped.id = d.pedido_id WHERE d.turno_caja_id = $1 ORDER BY d.numero`, [id]),
   ]);
   const porMedio = medios.rows.map((m) => ({ ...m, ventas: Number(m.ventas), devoluciones: Number(m.devoluciones) }))
@@ -161,6 +164,7 @@ export async function detalleTurno(db, id, user) {
     resumen: {
       ventas: ventasValidas.length, total_ventas: ventasValidas.reduce((s, v) => s + Number(v.total), 0),
       devoluciones: devoluciones.rows.length, total_devoluciones: devoluciones.rows.reduce((s, d) => s + Number(d.total_reembolso), 0),
+      redondeo: ventasValidas.reduce((s, v) => s + Number(v.redondeo), 0) - devoluciones.rows.reduce((s, d) => s + Number(d.redondeo), 0),
     },
     ventas: ventas.rows.map((v) => ({ ...v, codigo: codigoPedido(v.numero) })),
     devoluciones: devoluciones.rows.map((d) => ({ ...d, codigo: codigoDevolucion(d.numero), pedido_codigo: codigoPedido(d.pedido_numero) })),

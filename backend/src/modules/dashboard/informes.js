@@ -108,7 +108,7 @@ export const INFORMES = [
   },
   {
     id: 'ventas-por-medio', titulo: 'Ventas por medio de pago', grupo: 'Ventas', fechas: true,
-    descripcion: 'Lo cobrado y lo devuelto por cada medio de pago.',
+    descripcion: 'Lo cobrado y lo devuelto por cada medio de pago. El efectivo incluye el redondeo de la Ley 20.956, por eso puede diferir en pesos de la venta neta.',
     columnas: [
       { key: 'medio_pago', header: 'Medio de pago', tipo: 'texto' },
       { key: 'cobrado', header: 'Cobrado', tipo: 'clp', suma: true },

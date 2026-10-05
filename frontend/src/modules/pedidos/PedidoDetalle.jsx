@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
-import { descargarArchivo, verArchivo } from '../../archivos.js';
+import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { Slot } from '../../extensiones.jsx';
 import { fechaHora, money } from '../../format.js';
+import { textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 import { estadoPedidoClase } from './estados.js';
@@ -67,8 +68,7 @@ export default function PedidoDetalle() {
             Pasar a «{s}»
           </button>
         ))}
-        <button className="btn btn-outline-secondary" onClick={() => verArchivo(`/pedidos/${id}/pdf`).catch(setActionError)}><i className="bi bi-eye me-1" />Ver PDF</button>
-        <button className="btn btn-outline-secondary" onClick={() => descargarArchivo(`/pedidos/${id}/pdf`, `${p.codigo}.pdf`).catch(setActionError)}><i className="bi bi-file-earmark-pdf me-1" />Descargar PDF</button>
+        <BotonesDocumento path={`/pedidos/${id}/pdf`} nombre={`${p.codigo}.pdf`} onError={setActionError} etiquetaVer="Ver comprobante" />
         {tiene('cancelar') && (
           <button className="btn btn-outline-danger" disabled={busy}
             onClick={() => window.confirm('¿Cancelar el pedido? Se devuelve el stock y se anulan los pagos registrados (la devolución del dinero es aparte).')
@@ -108,6 +108,9 @@ export default function PedidoDetalle() {
           {p.descuento_total > 0 && <div className="text-success">Descuentos: <strong>-{money(p.descuento_total)}</strong></div>}
           <div className="text-muted small">Neto {money(p.subtotal_neto)} · IVA {money(p.iva)}</div>
           <div className="fs-4">Total: <strong>{money(p.total)}</strong></div>
+          {Number(p.redondeo) !== 0 && (
+            <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(p.redondeo), money)}</strong> · Total cobrado <strong>{money(Number(p.total) + Number(p.redondeo))}</strong></div>
+          )}
         </div>
       </div>
 

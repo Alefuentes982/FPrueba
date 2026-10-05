@@ -37,3 +37,42 @@ test('pagosSchema exige al menos un pago con monto positivo', () => {
   assert.equal(pagosSchema.safeParse({ pagos: [{ medio_pago_id: id(3), monto: 1500 }, { medio_pago_id: id(4), monto: 500 }] }).success, true);
   assert.equal(estadoSchema.safeParse({ estado: '' }).success, false);
 });
+
+// ---- Cobro con redondeo del efectivo (Ley 20.956) ----
+import { validarCobro } from './servicio.js';
+
+const EF = 'ef';
+const TJ = 'tj';
+const cobro = (total, pagos) => validarCobro({ total, pagos, efectivoId: EF });
+
+test('cobro solo en efectivo: se cobra el total redondeado y el ajuste queda registrado', () => {
+  assert.equal(cobro(3094, [{ medio_pago_id: EF, monto: 3090 }]), -4);
+  assert.equal(cobro(1547, [{ medio_pago_id: EF, monto: 1550 }]), 3);
+  assert.equal(cobro(3090, [{ medio_pago_id: EF, monto: 3090 }]), 0);
+});
+
+test('el efectivo informado debe ser exactamente el redondeado', () => {
+  assert.throws(() => cobro(3094, [{ medio_pago_id: EF, monto: 3094 }]), /efectivo a cobrar es \$3\.090/);
+  assert.throws(() => cobro(3094, [{ medio_pago_id: EF, monto: 3100 }]), /efectivo a cobrar es \$3\.090/);
+});
+
+test('con tarjeta no hay redondeo y debe calzar exacto', () => {
+  assert.equal(cobro(3094, [{ medio_pago_id: TJ, monto: 3094 }]), 0);
+  assert.throws(() => cobro(3094, [{ medio_pago_id: TJ, monto: 3090 }]), /suman \$3\.090 y el pedido es de \$3\.094/);
+});
+
+test('pago mixto: el redondeo se aplica solo a lo que se paga en efectivo', () => {
+  // 3.094 = 1.000 con tarjeta + 2.094 en efectivo -> 2.090
+  assert.equal(cobro(3094, [{ medio_pago_id: TJ, monto: 1000 }, { medio_pago_id: EF, monto: 2090 }]), -4);
+  assert.equal(cobro(3095, [{ medio_pago_id: TJ, monto: 1000 }, { medio_pago_id: EF, monto: 2100 }]), 5);
+  assert.throws(() => cobro(3094, [{ medio_pago_id: TJ, monto: 1000 }, { medio_pago_id: EF, monto: 2094 }]), /efectivo a cobrar es \$2\.090/);
+});
+
+test('un saldo en efectivo que se redondea a cero, o ya cubierto por otros medios, se rechaza', () => {
+  assert.throws(() => cobro(3094, [{ medio_pago_id: TJ, monto: 3091 }, { medio_pago_id: EF, monto: 3 }]), /se redondea a \$0/);
+  assert.throws(() => cobro(3094, [{ medio_pago_id: TJ, monto: 3094 }, { medio_pago_id: EF, monto: 10 }]), /ya cubren/);
+});
+
+test('varias líneas en efectivo se redondean juntas', () => {
+  assert.equal(cobro(3094, [{ medio_pago_id: EF, monto: 1000 }, { medio_pago_id: EF, monto: 2090 }]), -4);
+});
