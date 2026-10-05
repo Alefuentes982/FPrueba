@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { revisionSchema } from './esquemas.js';
 import { esSupervisor, turnosFiltrados } from './servicio.js';
 
-const supervisor = { id: 'a', permisos: ['cuadratura', 'usuarios'] };
+const supervisor = { id: 'a', permisos: ['cuadratura', 'supervision_caja'] };
+const administradorSinSupervision = { id: 'c', permisos: ['cuadratura', 'usuarios'] };
 const cajero = { id: 'b', permisos: ['cuadratura', 'pos'] };
 
-test('esSupervisor depende del permiso de administración', () => {
+test('esSupervisor depende del permiso de supervisión de caja, no del de usuarios', () => {
   assert.equal(esSupervisor(supervisor), true);
   assert.equal(esSupervisor(cajero), false);
+  assert.equal(esSupervisor(administradorSinSupervision), false);
 });
 
 test('un cajero solo consulta sus propios turnos aunque pida otros', () => {

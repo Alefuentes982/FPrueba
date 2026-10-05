@@ -1,13 +1,14 @@
 // Cuadratura de caja: historial de turnos, desglose del efectivo, diferencias y revisión.
-// Visibilidad: quien administra (permiso de usuarios) ve todos los turnos y los montos esperados; el resto solo ve
-// sus propios turnos y, mientras el turno está abierto, no se le muestra cuánto debería haber (cierre ciego).
+// Visibilidad: quien supervisa la caja (permiso supervision_caja: Administrador y Jefe de local) ve todos los turnos y
+// los montos esperados; el resto solo ve sus propios turnos y, mientras el turno está abierto, no se le muestra
+// cuánto debería haber (cierre ciego).
 import { condicionRango } from '../../core/fechas.js';
 import { HttpError, notFound } from '../../core/errors.js';
 import { codigoPedido } from '../pedidos/servicio.js';
 import { codigoDevolucion } from '../devoluciones/servicio.js';
 import { ESTADOS_TURNO } from './esquemas.js';
 
-export const esSupervisor = (user) => user.permisos.includes('usuarios');
+export const esSupervisor = (user) => user.permisos.includes('supervision_caja');
 export const diferenciaTurno = (t) => (t.fecha_cierre ? Number(t.contado) - Number(t.esperado) : null);
 
 const NO_ANULADAS = "e.nombre NOT IN ('Cancelado', 'Expirado')";
@@ -174,7 +175,7 @@ export async function detalleTurno(db, id, user) {
 }
 
 export async function revisarTurno(db, id, user, { conforme, observacion }) {
-  if (!esSupervisor(user)) throw new HttpError(403, 'Solo un administrador puede revisar turnos.');
+  if (!esSupervisor(user)) throw new HttpError(403, 'Solo quien supervisa la caja (administrador o jefe de local) puede revisar turnos.');
   const { rows } = await db.query(
     `SELECT t.usuario_id, t.fecha_cierre, t.monto_cierre_real_efectivo AS contado, t.monto_cierre_esperado_efectivo AS esperado,
             EXISTS (SELECT 1 FROM turno_revision r WHERE r.turno_caja_id = t.id) AS revisado

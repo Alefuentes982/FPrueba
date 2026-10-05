@@ -23,7 +23,7 @@ export default function TurnoDetalle() {
   const e = t.efectivo;
   const dif = e?.diferencia;
   const conforme = conformeElegido ?? dif === 0; // con diferencia, la revisión parte como "con observaciones"
-  const puedeVerPdf = !t.abierto || can('usuarios');
+  const puedeVerPdf = !t.abierto || can('supervision_caja');
 
   const revisar = async (ev) => {
     ev.preventDefault();
@@ -105,7 +105,7 @@ export default function TurnoDetalle() {
           </div>
         </form>
       ) : !t.abierto && (
-        <p className="text-muted">Pendiente de revisión por un administrador{t.es_propio ? ' (nadie revisa su propio turno)' : ''}.</p>
+        <p className="text-muted">Pendiente de revisión por un jefe de local o un administrador{t.es_propio ? ' (nadie revisa su propio turno)' : ''}.</p>
       )}
 
       {t.por_medio && (

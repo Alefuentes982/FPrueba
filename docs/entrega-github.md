@@ -8,7 +8,7 @@ La carpeta del proyecto muestra siempre **un solo estado**: el de la rama en la 
 
 - Cada parte es **un commit** (a veces con algún commit de apoyo, como un `fix` o un `docs`).
 - Cada parte tiene una **rama** `parte/N-nombre` y una **etiqueta** `parte-N` que apuntan a ese punto del historial.
-- La fila "Ajustes tras las pruebas" no es un módulo nuevo: reúne lo que se hizo después de la parte 10 (cambios sobre módulos ya entregados y los datos de prueba). Se sube igual que una parte, como último Pull Request, después de la parte 10.
+- Las filas "Ajustes tras las pruebas" y "Jefe de local" no son módulos nuevos: son cambios sobre módulos ya entregados (y los datos de prueba), hechos después de la parte 10. Se suben igual que una parte, como últimos Pull Request y en ese orden, después de la parte 10.
 
 Cada rama **contiene las anteriores**: `parte/4-ordenes-compra` tiene las partes 0 a 4. Por eso un Pull Request de la parte N hacia `main` muestra únicamente lo que agrega esa parte.
 
@@ -26,6 +26,7 @@ Cada rama **contiene las anteriores**: `parte/4-ordenes-compra` tiene las partes
 | 9 Cuadratura de caja | `parte/9-cuadratura` | `parte-9` | historial de turnos, revisión, Cierre Z (migración 005) |
 | 10 Dashboards y reportes | `parte/10-dashboards` | `parte-10` | indicadores, informes, exportación CSV y PDF |
 | Ajustes tras las pruebas | `ajustes/1-pruebas` | `ajustes-1` | datos de prueba, redondeo del efectivo, botón Imprimir, estado en el PDF de la orden, buscador en ajustes (migración 006) |
+| Jefe de local | `ajustes/2-jefe-de-local` | `ajustes-2` | rol Jefe de local y permiso de supervisión de caja (migración 007) |
 
 ## 2. Ver la separación en la carpeta del proyecto
 

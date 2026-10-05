@@ -31,7 +31,7 @@ function Indicador({ titulo, valor, clase = '', onClick, sub }) {
 
 export default function Cuadratura() {
   const { can } = useAuth();
-  const supervisor = can('usuarios');
+  const supervisor = can('supervision_caja');
   const [estado, setEstado] = useState('');
   const [sucursal, setSucursal] = useState('');
   const [cajero, setCajero] = useState('');
@@ -41,7 +41,7 @@ export default function Cuadratura() {
   const [actionError, setActionError] = useState(null);
 
   const catalogos = useAsync(() => api.get('/catalogos'), []);
-  const usuarios = useAsync(() => (supervisor ? api.get('/usuarios?limit=500') : Promise.resolve(null)), [supervisor]);
+  const cajeros = useAsync(() => (supervisor ? api.get('/cuadratura/cajeros') : Promise.resolve(null)), [supervisor]);
   const rangoInvalido = fechas.desde && fechas.hasta && fechas.desde > fechas.hasta;
   const filtros = { sucursal_id: sucursal, usuario_id: cajero, ...fechas };
   const resumen = useAsync(() => (rangoInvalido ? Promise.resolve(null) : api.get(`/cuadratura/resumen${qs(filtros)}`)), [sucursal, cajero, fechas.desde, fechas.hasta]);
@@ -72,7 +72,7 @@ export default function Cuadratura() {
           <div className="col-md-3">
             <select className="form-select" value={cajero} onChange={(e) => cambiar(setCajero)(e.target.value)}>
               <option value="">Todos los cajeros</option>
-              {usuarios.data?.data.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              {cajeros.data?.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
             </select>
           </div>
         )}

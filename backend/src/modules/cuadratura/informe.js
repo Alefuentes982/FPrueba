@@ -8,7 +8,7 @@ const hora = (v) => new Date(v).toLocaleString('es-CL', { timeZone: 'America/San
 // (los gestores de descarga como IDM interceptan application/pdf).
 export async function informeTurno(db, id, user) {
   const t = await detalleTurno(db, id, user);
-  if (t.abierto && !esSupervisor(user)) throw new HttpError(403, 'El reporte de un turno abierto solo lo ve un administrador.');
+  if (t.abierto && !esSupervisor(user)) throw new HttpError(403, 'El reporte de un turno abierto solo lo ve quien supervisa la caja (administrador o jefe de local).');
   const e = t.efectivo;
   const dif = e.diferencia;
   const doc = generarDocumentoPdf({
