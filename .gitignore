@@ -3,3 +3,5 @@ node_modules/
 .pgdata/
 dist/
 *.log
+.env.*
+!.env.example

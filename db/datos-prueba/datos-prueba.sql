@@ -1,6 +1,5 @@
 -- =====================================================================
--- Datos de prueba de FarmaClick (GENERADO por backend/scripts/datos-prueba.js: no editar a mano;
--- cambiar los CSV de db/datos-prueba/ y volver a generarlo con "npm run datos-prueba").
+-- Datos de prueba de FarmaClick (ficticios; no cargar en producción real).
 --
 -- Carga categorías, proveedores ficticios, 90 productos con su proveedor, stock mínimo y stock inicial en
 -- Casa Matriz (San Bernardo). Los nombres, costos y proveedores son de EJEMPLO, no son un catálogo real.

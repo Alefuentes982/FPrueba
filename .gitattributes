@@ -1,0 +1,5 @@
+# Los archivos que se ejecutan en Linux (contenedores, VM) deben conservar finales de línea LF aunque se clonen en Windows.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+*.yml text eol=lf

@@ -7,12 +7,7 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test",
-    "crear-admin": "node scripts/crear-admin.js",
-    "dev:db": "node scripts/dev-db.js",
-    "dev:local": "node --env-file=.env.local --watch src/server.js",
-    "migrar:local": "node scripts/migrar.js",
-    "datos-prueba": "node scripts/datos-prueba.js",
-    "datos-prueba:local": "node scripts/cargar-datos-prueba.js"
+    "crear-admin": "node scripts/crear-admin.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
@@ -23,8 +18,5 @@
     "pdfkit": "^0.20.2",
     "pg": "^8.23.1",
     "zod": "^3.25.76"
-  },
-  "devDependencies": {
-    "embedded-postgres": "^18.4.0-beta.17"
   }
 }

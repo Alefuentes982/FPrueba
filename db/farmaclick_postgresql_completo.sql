@@ -24,6 +24,13 @@
 --   * Seguridad: se aplica AL FINAL; permisos por columna; RLS activado
 --   * Índices: se restituyeron los que se habían perdido
 --
+-- CAMBIOS DE ESTA REVISIÓN (v2, sobre el script original)
+--   * transaccion_pago.buy_order VARCHAR(26) UNIQUE (+ CHECK): Webpay Plus exige una orden de compra de
+--     hasta 26 caracteres y el uuid del pedido tiene 36, así que no puede usarse como buy_order.
+--   * estado_transaccion: se agrega 'Abortado' (pago cancelado por el cliente o expirado en Webpay).
+--   * proveedor.activo y categoria.activa: baja lógica sin perder historial (como el resto de maestros).
+--   * Índice único parcial uq_prod_prov_principal: un solo proveedor principal por producto.
+--
 -- CONTRATO DE NOMBRES (los usan las funciones; vienen sembrados y NO deben
 -- renombrarse desde la interfaz):
 --   estado_pedido:     'Pago pendiente', 'Expirado'
@@ -104,6 +111,7 @@ CREATE TABLE tipo_movimiento (
 CREATE TABLE categoria (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL UNIQUE,
+    activa BOOLEAN DEFAULT TRUE NOT NULL,
     margen_pesimista NUMERIC(4,2) NOT NULL CHECK (margen_pesimista >= 0),
     margen_probable  NUMERIC(4,2) NOT NULL,
     margen_optimista NUMERIC(4,2) NOT NULL,
@@ -128,7 +136,8 @@ CREATE TABLE proveedor (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
     rut VARCHAR(12) NOT NULL UNIQUE,
-    contacto VARCHAR(150)
+    contacto VARCHAR(150),
+    activo BOOLEAN DEFAULT TRUE NOT NULL
 );
 
 CREATE TABLE regla_descuento (
@@ -316,11 +325,13 @@ CREATE TABLE transaccion_pago (
     pedido_id UUID NOT NULL REFERENCES pedido(id) ON DELETE RESTRICT,
     pasarela_id UUID REFERENCES pasarela(id) ON DELETE RESTRICT,
     medio_pago_id UUID NOT NULL REFERENCES medio_pago(id) ON DELETE RESTRICT,
+    buy_order VARCHAR(26) UNIQUE,                      -- orden de compra enviada a Webpay (máx. 26 caracteres)
     token_inicio VARCHAR(100),
     codigo_autorizacion VARCHAR(50),
     estado_transaccion_id UUID NOT NULL REFERENCES estado_transaccion(id) ON DELETE RESTRICT,
     monto NUMERIC(12,2) NOT NULL CHECK (monto > 0),
-    fecha_transaccion TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    fecha_transaccion TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    CHECK (pasarela_id IS NULL OR buy_order IS NOT NULL)
 );
 
 CREATE TABLE movimiento_inventario (
@@ -363,6 +374,7 @@ CREATE INDEX idx_prod_cat          ON producto(categoria_id);
 CREATE INDEX idx_pprov_prov        ON producto_proveedor(proveedor_id);
 CREATE UNIQUE INDEX uq_turno_abierto_por_caja ON turno_caja(caja_id)   WHERE fecha_cierre IS NULL;
 CREATE UNIQUE INDEX uq_turno_abierto_por_usu  ON turno_caja(usuario_id) WHERE fecha_cierre IS NULL;
+CREATE UNIQUE INDEX uq_prod_prov_principal    ON producto_proveedor(producto_id) WHERE es_principal;   -- un solo proveedor principal por producto
 
 -- =====================================================================
 -- 6. FUNCIONES Y TRIGGERS DE INTEGRIDAD (todas SECURITY DEFINER)
@@ -747,7 +759,7 @@ INSERT INTO estado_pedido (nombre) VALUES
     ('Pago pendiente'), ('Pagado'), ('En preparación'), ('Listo para retiro'),
     ('En despacho'), ('Entregado'), ('Cancelado'), ('Expirado');
 INSERT INTO estado_orden_compra (nombre) VALUES ('Pendiente'), ('Recibida parcial'), ('Recibida'), ('Cancelada');
-INSERT INTO estado_transaccion (nombre) VALUES ('Pendiente'), ('Aprobado'), ('Rechazado'), ('Anulado');
+INSERT INTO estado_transaccion (nombre) VALUES ('Pendiente'), ('Aprobado'), ('Rechazado'), ('Anulado'), ('Abortado');
 INSERT INTO medio_pago (nombre) VALUES ('Efectivo'), ('Débito'), ('Crédito'), ('Transferencia'), ('Webpay Plus');
 INSERT INTO pasarela (nombre) VALUES ('Transbank Webpay Plus');
 
@@ -845,7 +857,7 @@ GRANT INSERT (pedido_id, producto_id, cantidad, regla_descuento_id) ON detalle_p
 GRANT UPDATE (cantidad, regla_descuento_id) ON detalle_pedido TO app_backend;
 
 GRANT SELECT ON transaccion_pago TO app_backend;
-GRANT INSERT (pedido_id, pasarela_id, medio_pago_id, token_inicio, codigo_autorizacion, estado_transaccion_id, monto) ON transaccion_pago TO app_backend;
+GRANT INSERT (pedido_id, pasarela_id, medio_pago_id, buy_order, token_inicio, codigo_autorizacion, estado_transaccion_id, monto) ON transaccion_pago TO app_backend;
 GRANT UPDATE (estado_transaccion_id, codigo_autorizacion) ON transaccion_pago TO app_backend;
 
 GRANT SELECT ON turno_caja TO app_backend;                       -- el cierre se hace solo con fn_cerrar_turno

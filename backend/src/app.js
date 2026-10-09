@@ -4,14 +4,21 @@ import cors from 'cors';
 import { autenticar, exigeModulo } from './core/auth.js';
 import { routerCatalogos } from './core/catalogos.js';
 import { errorHandler, HttpError } from './core/errors.js';
+import { pool } from './core/db.js';
 import modulos from './modules/index.js';
 
 export const app = express();
-app.set('trust proxy', 1); // detrás de un proxy/hosting, el rate limit debe ver la IP real
+// Saltos de proxy delante de la API, para que el rate limit vea la IP real del cliente: 1 con un solo proxy (hosting o
+// Nginx); 2 en Oracle Cloud (balanceador → Nginx → API). Se define con TRUST_PROXY.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true }));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+// Consulta mínima a la base: la usa el flujo de mantención para que Supabase no pause el proyecto por inactividad.
+app.get('/api/health/db', async (_req, res, next) => {
+  try { await pool.query('SELECT 1'); res.json({ ok: true }); } catch (err) { next(err); }
+});
 
 // Cada módulo exige sesión y su permiso (rol_permiso), salvo los públicos.
 for (const m of modulos) {

@@ -1,60 +1,51 @@
 # FarmaClick
 
-Sistema de gestión para farmacias (proyecto de título MediFarm × D-Software): abastecimiento, inventario, venta presencial con cuadratura de caja, reportes y, más adelante, venta en línea.
+Sistema de gestión para farmacias (proyecto de título MediFarm × D-Software): abastecimiento, inventario, venta presencial con cuadratura de caja y reportes. La venta en línea (tienda y Webpay) es la etapa siguiente.
 
-- `backend/` — API Node.js + Express sobre PostgreSQL (Supabase). Organizada por módulos en `src/modules/`; lo compartido está en `src/core/`.
-- `frontend/` — React + Vite + Bootstrap. Misma organización: `src/modules/<módulo>/`.
-- `db/` — esquema base (`farmaclick_postgresql_completo.sql`) y migraciones numeradas (`db/migraciones/`).
-- `docs/` — hoja de ruta por módulos y guía de entrega a GitHub.
+- `backend/` — API Node.js 22 + Express sobre PostgreSQL. Un módulo por carpeta en `src/modules/`; lo compartido en `src/core/`.
+- `frontend/` — React + Vite + Bootstrap. Misma organización en `src/modules/`.
+- `db/` — esquema base, migraciones `001`–`008` e `instalacion_completa.sql` (todo en un archivo; se regenera con `db/generar-instalacion.sh`). `desarrollo.sql` solo se usa en el entorno Docker local.
+- `deploy/` y `.github/workflows/` — despliegue en Oracle Cloud (Docker Compose) e integración continua.
+- `docs/guia-despliegue.md` — guía paso a paso: Docker local, GitHub, Supabase, Oracle Cloud.
 
-## Modo local (sin Supabase)
-No requiere instalar Postgres ni cuenta de Supabase. En tres terminales:
-1. `cd backend && npm install && npm run dev:db` — PostgreSQL embebido con el esquema de `db/`, datos de ejemplo (`backend/scripts/seeds/`) y un admin (`admin@farmaclick.local` / `Admin12345`). Los datos persisten en `backend/.pgdata`.
-2. `cd backend && npm run dev:local` — API en :3000 con login de desarrollo (`AUTH_MODE=local`; solo desarrollo, se niega a arrancar con `NODE_ENV=production`).
-3. `cd frontend && npm install && npm run dev` — http://localhost:5173.
+## Desarrollo local con Docker
+Requisitos: Docker Desktop y Git. Nada más (no hace falta instalar Node ni PostgreSQL).
 
-Limitación: no hay pg_cron, así que no corren los jobs de expiración de reservas ni de baja de vencidos.
+```bash
+git clone https://github.com/<organizacion>/farmaclick.git && cd farmaclick
+docker compose up
+```
+Abre http://localhost:5173. Usuarios de desarrollo: `admin@farmaclick.local` / `Admin12345` y `vendedor@farmaclick.local` / `Vendedor12345`.
+La primera vez se crea la base con el esquema, un catálogo de 90 productos y los usuarios. Para empezar de cero: `docker compose down -v && docker compose up`.
+La API queda en http://localhost:3000/api/health y PostgreSQL en `localhost:54329` (usuario `postgres`, clave `postgres`, base `farmaclick`). Las pruebas: `docker compose exec api npm test`.
 
-## Puesta en marcha (Supabase)
-1. En Supabase ejecutar `db/farmaclick_postgresql_completo.sql` y luego `ALTER ROLE app_backend LOGIN PASSWORD '<secreto>';`.
-2. `cd backend && cp .env.example .env` y completar `DATABASE_URL` (pooler, usuario `app_backend.<project-ref>`) y las claves de Supabase Auth (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). La service role key solo vive en el backend.
-3. `npm install`, crear el primer administrador con `npm run crear-admin -- correo@dominio.cl "Contraseña" "Nombre"` y `npm run dev` (API en :3000). Pruebas: `npm test`.
-4. `cd frontend && npm install && npm run dev` (http://localhost:5173, proxy de `/api` al backend).
-5. Ejecutar a mano, en el editor SQL y en orden, las migraciones de `db/migraciones/` que correspondan a los módulos desplegados. <!-- parte:4 -->
+El login local (`AUTH_MODE=local`) solo existe para desarrollo y la API se niega a arrancar con él en producción. En Supabase la autenticación es la real.
 
 ## Módulos
-Cada módulo se entrega por separado (ver `docs/entrega-github.md`) y se registra en `backend/src/modules/index.js` y `frontend/src/modules/index.js`.
+| Módulo | Qué hace | Migración |
+|---|---|---|
+| Base y acceso | Login con Supabase Auth, sesión, permisos por módulo | — |
+| Usuarios y permisos | Personal, roles y matriz de permisos | — |
+| Proveedores | CRUD con validación de RUT | — |
+| Productos | CRUD, margen, precio calculado por la base, proveedores por producto | — |
+| Órdenes de compra | Borrador → emitida → recepción total o parcial (lotes, kardex, PMP), PDF | 001 |
+| Inventario | Stock por sucursal, lotes y vencimientos, kardex, ajustes y mermas | 002 |
+| Pedidos | Núcleo de venta de todos los canales: reserva FEFO, pago dividido, estados, comprobante | 003 |
+| Caja y venta presencial | Turnos, venta en mostrador, cierre ciego | — |
+| Devoluciones | Reembolso prorrateado, reingreso opcional de stock, comprobante | 004, 006 |
+| Cuadratura de caja | Historial de turnos, revisión por supervisión, Cierre Z / reporte X | 005 |
+| Dashboard y reportes | Ventas, inventario y compras con exportación CSV y PDF | — |
+| Jefe de local | Rol con permisos de operación y supervisión de caja | 007 |
 
-- **Base y acceso** — login con Supabase Auth, sesión, permisos por módulo (`rol_permiso`), registro de módulos. <!-- parte:0 -->
-- **Usuarios y permisos** — alta y edición de personal, matriz de roles y permisos. <!-- parte:1 -->
-- **Proveedores** — CRUD con validación de RUT. <!-- parte:2 -->
-- **Productos** — CRUD, margen y precio calculado por la base, proveedores por producto. <!-- parte:3 -->
-- **Órdenes de compra** — borrador → emitida → recepción total o parcial (lotes, kardex, PMP), número correlativo, PDF, filtro por fechas. Migración `001`. <!-- parte:4 -->
-- **Inventario** — stock por sucursal con alerta de stock mínimo, lotes y vencimientos (baja de vencidos), kardex con filtros y ajustes/mermas con motivo obligatorio. Migración `002`. <!-- parte:5 -->
-- **Pedidos** — núcleo de venta compartido por todos los canales: pedido con número correlativo (PED-000123), precio y descuentos por cantidad fijados por la base, reserva de stock FEFO, pago dividido en varios medios, avance de estados, cancelación y expiración de pagos pendientes, comprobante PDF. Hoy se crean pedidos a distancia (canal Online) desde el backoffice; la caja (parte 7) y la tienda (parte 11) usan el mismo servicio (`modules/pedidos/servicio.js`). Migración `003`. <!-- parte:6 -->
-- **Caja y venta presencial** — apertura de turno con efectivo inicial, venta en el mostrador (buscador por SKU o nombre con lector de código, carrito, descuentos por cantidad, pago dividido con vuelto), comprobante, ventas del turno y cierre ciego con la diferencia de caja. Una sola operación crea el pedido, reserva el stock, cobra y entrega; si algo falla no queda nada a medias. Configuración de cajas para administradores. Sin migración. <!-- parte:7 -->
-- **Devoluciones** — devolución de productos de un pedido entregado (hasta 30 días, configurable con `DEVOLUCION_MAX_DIAS`): reembolso prorrateado con el descuento de la compra, devuelto por los mismos medios con que se pagó y sin exceder lo pagado por cada uno; reingreso opcional de stock al lote de origen (por defecto no se reingresa); el efectivo sale de la caja del turno y se descuenta en el cierre. Registros inmutables con totales verificados por la base, comprobante PDF y permiso propio (`devoluciones`: Administrador y Vendedor, ajustable en Roles y permisos). Migración `004`. <!-- parte:8 -->
-- **Cuadratura de caja** — historial de turnos con indicadores del período (ventas netas, diferencia neta, faltantes y sobrantes, pendientes de revisión), filtros por estado, sucursal, cajero y fechas, desglose por medio de pago y por cajero, ficha del turno con el cuadre del efectivo (inicial + ventas − devoluciones = esperado vs. contado), revisión conforme u observada por otra persona (con el permiso de supervisión de caja, que tienen el Administrador y el Jefe de local; nadie revisa su propio turno) y PDF de Cierre Z (turno cerrado) o reporte X (abierto). Quien supervisa la caja ve todo; el cajero solo sus turnos y sin el esperado de un turno abierto. En la caja, ayuda para contar por denominación. Migración `005`. <!-- parte:9 -->
-- **Dashboard y reportes** — portada de solo lectura con indicadores del período (ventas netas de devoluciones, ticket promedio, unidades, devoluciones) y tres pestañas: **Ventas** (serie diaria con gráfico, por canal, medio de pago, categoría y sucursal, los 10 productos más vendidos), **Inventario** (valor al costo, stock bajo el mínimo, lotes por vencer o vencidos, valorizado por sucursal y categoría) y **Compras** (por proveedor, órdenes por recibir con días de atraso). Filtros por rango de fechas y sucursal; cada informe se exporta a CSV (para Excel) y PDF. Inventario y Compras se ven solo con el permiso de ese módulo. Otros módulos agregan tarjetas con el slot `dashboard.tarjetas` (hoy, la de Caja de Cuadratura). Sin migración. <!-- parte:10 -->
-- **Redondeo del efectivo (Ley 20.956)** — el efectivo se cobra y se devuelve redondeado al múltiplo de $10 más cercano (terminaciones 1 a 4 bajan, 5 a 9 suben); tarjetas y transferencias van por el monto exacto. El total del pedido no cambia: la diferencia queda en `pedido.redondeo` y `devolucion.redondeo`, se ve en la caja, en los comprobantes y en la cuadratura, y el cierre de caja usa el efectivo realmente recibido. El efectivo devuelto nunca pasa de lo que el cliente pagó en efectivo. Migración `006`. <!-- ajustes:1 -->
-- **Ajustes tras las pruebas** — botón Imprimir (junto a Ver y Descargar) en los comprobantes de venta, pedido y devolución; estado actual de la orden de compra en su PDF (con lo recibido por línea y un sello cuando ya hubo recepción); buscador por SKU o nombre al registrar ajustes de inventario. <!-- ajustes:1 -->
-- **Jefe de local** — rol nuevo con permisos de operación (dashboard, caja, inventario, proveedores y órdenes de compra, pedidos, devoluciones y cuadratura) y con el permiso de **supervisión de caja**, que se separa del de administrar usuarios: ve todos los turnos, revisa las cuadraturas (también las del administrador) y ve el reporte X, sin gestionar usuarios ni cajas. Los permisos se ajustan en "Roles y permisos". Migración `007`. <!-- ajustes:2 -->
+Cada módulo se registra en `backend/src/modules/index.js` y `frontend/src/modules/index.js`; sumar uno es crear su carpeta y agregarlo ahí. Los permisos se leen de la base en cada request.
 
-## Datos de prueba
-`db/datos-prueba/` trae 90 productos de ejemplo con 6 proveedores ficticios y stock inicial en Casa Matriz (San Bernardo), para probar el sistema. Se carga con un SQL idempotente (editor SQL de Supabase o `npm run datos-prueba:local`) y se puede reemplazar por otro catálogo editando los CSV (`npm run datos-prueba`). Ver `db/datos-prueba/README.md`.
+## Flujo de trabajo en equipo
+- `main` = producción, `develop` = dev/staging, `feature/<nombre>` = cada funcionalidad. Se trabaja en una rama `feature/*`, se abre un Pull Request hacia `develop` y se fusiona cuando pasa la integración continua.
+- Al fusionar en `develop` se construyen las imágenes `dev` y se despliegan solas en la VM de dev. Un Pull Request de `develop` hacia `main` publica y despliega producción (pide aprobación).
+- Cualquier cambio de base de datos va en una migración nueva en `db/migraciones/` (idempotente); luego `./db/generar-instalacion.sh`.
 
-## Acceso y permisos
-Login con Supabase Auth (correo y contraseña); cada cuenta tiene una fila en `usuario` con el mismo id. Cada módulo declara la clave de permiso que exige (tabla `modulo`) y los permisos se leen en cada request, así que quitar uno rige de inmediato. Los módulos con `publico: true` no exigen sesión (login hoy; tienda en línea más adelante).
+## Despliegue
+GitHub Actions (`ci.yml`): pruebas del backend, esquema SQL aplicado sobre PostgreSQL 16 limpio, compilación del frontend, imágenes `linux/arm64` hacia GitHub Container Registry y despliegue por SSH a la VM de Oracle Cloud del entorno. `mantener-activo.yml` consulta `/api/health/db` cada 3 días para que Supabase (plan gratuito) no pause el proyecto. Detalle y configuración en `docs/guia-despliegue.md`.
 
-## API (prefijo /api)
-- `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`; el resto exige `Authorization: Bearer <token>`. `GET /catalogos`: listas de apoyo que aporta cada módulo. <!-- parte:0 -->
-- `/usuarios` (GET, GET :id, POST, PUT :id), `/roles` (GET, PUT :id/permisos). <!-- parte:1 -->
-- `/proveedores` (GET, GET :id, POST, PUT :id). <!-- parte:2 -->
-- `/productos` (GET, GET :id, GET proveedor/:proveedorId, POST, PUT :id, PATCH :id/activo, PUT :id/proveedores). <!-- parte:3 -->
-- `/ordenes-compra` (GET, GET :id, POST, PUT :id, POST :id/emitir, POST :id/cancelar, POST :id/recibir, GET :id/pdf). Los listados aceptan `desde` y `hasta` (AAAA-MM-DD, días de Chile). El PDF llega como JSON con base64 (los gestores de descarga como IDM interceptan `application/pdf`). Datos de la empresa en el PDF: `EMPRESA_NOMBRE`, `EMPRESA_RUT`, `EMPRESA_DIRECCION`. <!-- parte:4 -->
-- `/inventario/stock` (GET, PUT minimo), `/inventario/lotes` (GET, POST :id/baja-vencido, POST bajas-vencidos), `/inventario/kardex` (GET con filtros y rango de fechas), `/inventario/ajustes` (POST: ajuste positivo, ajuste negativo, merma). El kardex es inmutable: una corrección es un ajuste en sentido contrario. <!-- parte:5 -->
-- `/pedidos` (GET con filtros y fechas, GET catalogo, GET :id, POST, PUT :id, POST :id/reservar, :id/pagos, :id/estado, :id/cancelar, POST expirar-pendientes, GET :id/pdf). Ciclo: Pago pendiente → Pagado → En preparación → Listo para retiro o En despacho → Entregado; se cancela hasta "Listo para retiro". Un pedido sin pagar expira a los 20 minutos: en Supabase lo hace el job de pg_cron, en modo local el botón "Expirar pendientes". <!-- parte:6 -->
-- `/pos` (GET turno, POST turnos, POST turnos/:id/cerrar, GET turno/ventas, GET productos, POST cotizar, POST ventas, GET ventas/:id/pdf, GET/POST cajas, PATCH cajas/:id). Exige el permiso `pos`; crear o desactivar cajas, además, el de administración de usuarios. Un turno abierto por usuario y por caja; solo quien lo abrió lo cierra. El monto en efectivo de `pagos` se informa ya redondeado (Ley 20.956); el servidor rechaza otro valor y explica cuál corresponde. <!-- parte:7 -->
-- `/devoluciones` (GET con filtros y fechas, GET buscar-pedidos, GET pedido/:id, POST cotizar, POST, GET :id, GET :id/pdf). Exige el permiso `devoluciones`. Una devolución en efectivo exige turno de caja abierto; el cierre (`fn_cierre_esperado_efectivo`) descuenta el efectivo devuelto. <!-- parte:8 -->
-- `/cuadratura` (GET turnos con filtros y fechas, GET resumen, GET turnos/:id, POST turnos/:id/revision, GET turnos/:id/pdf, GET cajeros). Exige el permiso `cuadratura`; ver todos los turnos, revisarlos y ver el efectivo esperado de un turno abierto, además, el de supervisión de caja (`supervision_caja`). <!-- parte:9 -->
-- `/dashboard` (GET resumen, GET informes, GET informes/:id, GET informes/:id/exportar?formato=csv|pdf). Exige el permiso `dashboard`; los informes de inventario y de compras, además, `inventario` y `proveedores`. Filtros: `desde`, `hasta` (hasta 2 años), `sucursal_id`; `dias` (lotes por vencer) y `limite`. Solo lectura. La exportación llega como JSON con base64, igual que los PDF. <!-- parte:10 -->
+## Variables de entorno
+Backend: `backend/.env.example`. Producción: `deploy/.env.example` (se copia como `.env` en cada VM, nunca a Git). La clave `SUPABASE_SERVICE_ROLE_KEY` solo vive en el backend.
