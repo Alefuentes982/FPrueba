@@ -80,7 +80,6 @@ jobs:
   desplegar:
     needs: imagenes
     runs-on: ubuntu-latest
-    # Asignamos los secretos dinámicamente según la rama para esquivar la restricción de Environments de la cuenta gratuita
     env:
       VM_HOST: ${{ github.ref_name == 'main' && secrets.PROD_VM_HOST || secrets.DEV_VM_HOST }}
       VM_USER: ${{ github.ref_name == 'main' && secrets.PROD_VM_USER || secrets.DEV_VM_USER }}
@@ -97,7 +96,7 @@ jobs:
           SSH="ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }}"
           $SSH "mkdir -p ~/farmaclick"
           scp -i ~/.ssh/id_deploy deploy/docker-compose.yml ${{ env.VM_USER }}@${{ env.VM_HOST }}:~/farmaclick/docker-compose.yml
-          $SSH "cd ~/farmaclick && docker compose pull && docker compose up -d && docker image prune -f"
+          $SSH "cd ~/farmaclick && GHCR_OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]') docker compose pull && GHCR_OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]') docker compose up -d && docker image prune -f"
       - name: Verificar que la API responde
         run: |
           sleep 10
