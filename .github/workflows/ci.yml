@@ -96,6 +96,7 @@ jobs:
           # 1. Transformamos el nombre de usuario a minúsculas dinámicamente
           OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           # 2. Preparamos la carpeta y copiamos el archivo original
+          #
           ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "mkdir -p ~/farmaclick"
           scp -i ~/.ssh/id_deploy deploy/docker-compose.yml ${{ env.VM_USER }}@${{ env.VM_HOST }}:~/farmaclick/docker-compose.yml
           # 3. Ejecutamos Docker inyectando la variable de forma directa y segura
