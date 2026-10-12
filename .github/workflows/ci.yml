@@ -90,6 +90,12 @@ jobs:
   desplegar:
     needs: imagenes
     runs-on: ubuntu-latest
+    # Un solo despliegue a la vez por entorno: si se suben dos commits seguidos (o se re-ejecuta un job), el segundo
+    # espera a que termine el primero. Dos "docker compose up" simultáneos en la misma VM chocan entre sí
+    # ("Conflict" o "removal ... already in progress").
+    concurrency:
+      group: desplegar-${{ github.ref_name }}
+      cancel-in-progress: false
     env:
       VM_HOST: ${{ github.ref_name == 'main' && secrets.PROD_VM_HOST || secrets.DEV_VM_HOST }}
       VM_USER: ${{ github.ref_name == 'main' && secrets.PROD_VM_USER || secrets.DEV_VM_USER }}
@@ -112,7 +118,8 @@ jobs:
           scp -i ~/.ssh/id_deploy deploy/docker-compose.yml ${{ env.VM_USER }}@${{ env.VM_HOST }}:~/farmaclick/docker-compose.yml
           # 4. Ejecutamos Docker inyectando ambas variables. Antes de levantar se eliminan los contenedores temporales
           #    "<id>_farmaclick-..." que deja un despliegue interrumpido: si quedan, el siguiente falla con "Conflict".
-          ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "cd ~/farmaclick && export GHCR_OWNER=$OWNER_LOWER IMAGE_TAG=$TAG_ENV && docker compose pull && (docker ps -aq --filter 'name=_farmaclick-' | xargs -r docker rm -f) && docker compose up -d --remove-orphans && docker image prune -f"
+          #    Si Docker aún está terminando de borrar un contenedor, se espera 15 s y se reintenta una vez.
+          ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "cd ~/farmaclick && export GHCR_OWNER=$OWNER_LOWER IMAGE_TAG=$TAG_ENV && docker compose pull && (docker ps -aq --filter 'name=_farmaclick-' | xargs -r docker rm -f) && (docker compose up -d --remove-orphans || (sleep 15 && docker compose up -d --remove-orphans)) && docker image prune -f"
       - name: Verificar que la API responde
         run: |
           sleep 10
