@@ -110,8 +110,9 @@ jobs:
           # 3. Preparamos la carpeta y copiamos el archivo original
           ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "mkdir -p ~/farmaclick"
           scp -i ~/.ssh/id_deploy deploy/docker-compose.yml ${{ env.VM_USER }}@${{ env.VM_HOST }}:~/farmaclick/docker-compose.yml
-          # 4. Ejecutamos Docker inyectando ambas variables
-          ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "cd ~/farmaclick && GHCR_OWNER=$OWNER_LOWER IMAGE_TAG=$TAG_ENV docker compose pull && GHCR_OWNER=$OWNER_LOWER IMAGE_TAG=$TAG_ENV docker compose up -d && docker image prune -f"
+          # 4. Ejecutamos Docker inyectando ambas variables. Antes de levantar se eliminan los contenedores temporales
+          #    "<id>_farmaclick-..." que deja un despliegue interrumpido: si quedan, el siguiente falla con "Conflict".
+          ssh -i ~/.ssh/id_deploy ${{ env.VM_USER }}@${{ env.VM_HOST }} "cd ~/farmaclick && export GHCR_OWNER=$OWNER_LOWER IMAGE_TAG=$TAG_ENV && docker compose pull && (docker ps -aq --filter 'name=_farmaclick-' | xargs -r docker rm -f) && docker compose up -d --remove-orphans && docker image prune -f"
       - name: Verificar que la API responde
         run: |
           sleep 10
