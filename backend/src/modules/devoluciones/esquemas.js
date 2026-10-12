@@ -23,3 +23,16 @@ export const devolucionSchema = z.object({
     referencia: optionalText(50),
   })).min(1, 'Indique cómo se devuelve el dinero.'),
 });
+
+// Filtros de la búsqueda de pedidos a devolver (query string). Los campos vacíos se ignoran.
+const vacioANulo = (v) => (v === '' || v == null ? undefined : v);
+const monto = z.preprocess(vacioANulo, z.coerce.number({ invalid_type_error: 'Monto inválido.' }).min(0, 'El monto no puede ser negativo.').optional());
+export const filtrosDevolviblesSchema = z.object({
+  q: z.preprocess(vacioANulo, z.string().trim().max(150).optional()),
+  producto: z.preprocess(vacioANulo, z.string().trim().max(150).optional()),
+  medio_pago_id: z.preprocess(vacioANulo, uuid.optional()),
+  sucursal_id: z.preprocess(vacioANulo, uuid.optional()),
+  monto_desde: monto,
+  monto_hasta: monto,
+}).refine((f) => f.monto_desde == null || f.monto_hasta == null || f.monto_desde <= f.monto_hasta,
+  'El "monto desde" no puede ser mayor que el "monto hasta".');

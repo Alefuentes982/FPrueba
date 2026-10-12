@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, qs } from '../../api.js';
-import { fechaHora, money } from '../../format.js';
+import { fechaHora, hoyIso, money } from '../../format.js';
 import { redondearEfectivo, textoAjuste } from '../../redondeo.js';
-import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Field, Filtros, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function NuevaDevolucion() {
   const navigate = useNavigate();
   const [params] = useSearchParams(); // ?pedido=ID llega desde la ficha del pedido
-  const [busqueda, setBusqueda] = useState('');
-  const [resultados, setResultados] = useState([]);
+  const [borrador, setBorrador] = useState(FILTROS_VACIOS); // lo que se está escribiendo
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS); // lo que se buscó
   const [pedidoId, setPedidoId] = useState(params.get('pedido') ?? '');
   const [cant, setCant] = useState({}); // detalle_id -> { cantidad, reingresa }
   const [cot, setCot] = useState(null);
@@ -23,14 +23,10 @@ export default function NuevaDevolucion() {
   const pedido = useAsync(() => (pedidoId ? api.get(`/devoluciones/pedido/${pedidoId}`) : Promise.resolve(null)), [pedidoId]);
   const p = pedido.data;
 
-  useEffect(() => {
-    if (!busqueda.trim()) { setResultados([]); return undefined; }
-    let vigente = true;
-    const t = setTimeout(() => {
-      api.get(`/devoluciones/buscar-pedidos${qs({ q: busqueda.trim() })}`).then((r) => vigente && setResultados(r)).catch(() => vigente && setResultados([]));
-    }, 250);
-    return () => { vigente = false; clearTimeout(t); };
-  }, [busqueda]);
+  // Pedidos que todavía se pueden devolver. Sin filtros, los más recientes dentro del plazo.
+  const devolvibles = useAsync(
+    () => (pedidoId ? Promise.resolve(null) : api.get(`/devoluciones/pedidos-devolvibles${qs(filtros)}`)),
+    [pedidoId, JSON.stringify(filtros)]);
 
   const items = Object.entries(cant)
     .filter(([, v]) => Number(v.cantidad) > 0)
@@ -87,7 +83,7 @@ export default function NuevaDevolucion() {
     }
   };
 
-  const elegirPedido = (id) => { setPedidoId(id); setBusqueda(''); setResultados([]); setCant({}); setCot(null); setError(null); };
+  const elegirPedido = (id) => { setPedidoId(id); setCant({}); setCot(null); setError(null); };
 
   return (
     <>
@@ -97,19 +93,8 @@ export default function NuevaDevolucion() {
       <ErrorAlert error={error} onClose={() => setError(null)} />
 
       {!pedidoId && (
-        <div style={{ maxWidth: 640 }}>
-          <p className="text-muted">Busque el pedido entregado por su número (PED-000123) o por el nombre del cliente.</p>
-          <input className="form-control form-control-lg mb-2" autoFocus placeholder="PED-000123 o cliente" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-          <div className="list-group">
-            {busqueda.trim() && resultados.length === 0 && <div className="list-group-item text-muted">No hay pedidos entregados con ese dato.</div>}
-            {resultados.map((r) => (
-              <button type="button" key={r.id} className="list-group-item list-group-item-action d-flex justify-content-between" onClick={() => elegirPedido(r.id)}>
-                <span><span className="font-monospace me-2">{r.codigo}</span>{r.nombre_cliente} <span className="text-muted">· {r.sucursal}</span></span>
-                <span>{fechaHora(r.fecha)} · <strong>{money(r.total)}</strong></span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <BuscarPedido borrador={borrador} setBorrador={setBorrador} filtros={filtros} setFiltros={setFiltros}
+          catalogos={catalogos.data} resultado={devolvibles} onElegir={elegirPedido} />
       )}
 
       {pedidoId && pedido.loading && <Spinner />}
@@ -212,6 +197,155 @@ export default function NuevaDevolucion() {
           )}
         </>
       )}
+    </>
+  );
+}
+
+const FILTROS_VACIOS = {
+  q: '', producto: '', medio_pago_id: '', desde: '', hasta: '', monto_desde: '', monto_hasta: '', sucursal_id: '',
+};
+
+// Búsqueda del pedido a devolver: filtros (número o cliente, producto comprado, medio de pago, fechas, monto, sucursal)
+// y la lista de pedidos que se pueden devolver. Los filtros se aplican con "Buscar" (o Enter); los atajos de fecha y
+// "Limpiar", de inmediato.
+function BuscarPedido({ borrador, setBorrador, filtros, setFiltros, catalogos, resultado, onElegir }) {
+  const set = (campo) => (e) => setBorrador((b) => ({ ...b, [campo]: e.target.value }));
+  const fechaInvalida = Boolean(borrador.desde && borrador.hasta && borrador.desde > borrador.hasta);
+  const montoInvalido = Boolean(borrador.monto_desde && borrador.monto_hasta && Number(borrador.monto_desde) > Number(borrador.monto_hasta));
+  const invalido = fechaInvalida || montoInvalido;
+  const pendiente = JSON.stringify(borrador) !== JSON.stringify(filtros);
+  const hayFiltros = Object.values(filtros).some(Boolean) || Object.values(borrador).some(Boolean);
+  const aplicar = (f) => { setBorrador(f); setFiltros(f); };
+  const buscar = (e) => { e?.preventDefault(); if (!invalido) setFiltros(borrador); };
+  const atajo = (dias) => aplicar({ ...borrador, desde: hoyIso(-dias), hasta: hoyIso() });
+  const lista = resultado.data?.data ?? [];
+  const plazo = resultado.data?.plazo_dias;
+
+  return (
+    <>
+      <p className="text-muted">
+        Elija el pedido a devolver. Aquí aparecen los pedidos entregados dentro del plazo de devolución; use los filtros
+        si no recuerda el número.
+      </p>
+      <Filtros titulo="Buscar el pedido">
+        <form onSubmit={buscar}>
+          <div className="row g-2">
+            <div className="col-md-4">
+              <Field label="N° de pedido o cliente">
+                <input className="form-control" autoFocus placeholder="PED-000123 o nombre" value={borrador.q} onChange={set('q')} />
+              </Field>
+            </div>
+            <div className="col-md-4">
+              <Field label="Producto (SKU o nombre)">
+                <input className="form-control" placeholder="Qué compró: paracetamol, MED-001…" value={borrador.producto} onChange={set('producto')} />
+              </Field>
+            </div>
+            <div className="col-md-4">
+              <Field label="Medio de pago">
+                <select className="form-select" value={borrador.medio_pago_id} onChange={set('medio_pago_id')}>
+                  <option value="">Cualquiera</option>
+                  {catalogos?.medios_pago?.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="col-6 col-md-3">
+              <Field label="Comprado desde">
+                <input type="date" className={`form-control ${fechaInvalida ? 'is-invalid' : ''}`} value={borrador.desde}
+                  max={borrador.hasta || undefined} onChange={set('desde')} />
+              </Field>
+            </div>
+            <div className="col-6 col-md-3">
+              <Field label="Hasta">
+                <input type="date" className={`form-control ${fechaInvalida ? 'is-invalid' : ''}`} value={borrador.hasta}
+                  min={borrador.desde || undefined} onChange={set('hasta')} />
+              </Field>
+            </div>
+            <div className="col-6 col-md-2">
+              <Field label="Monto desde">
+                <div className="input-group">
+                  <span className="input-group-text">$</span>
+                  <input type="number" min="0" step="1" className={`form-control ${montoInvalido ? 'is-invalid' : ''}`}
+                    value={borrador.monto_desde} onChange={set('monto_desde')} />
+                </div>
+              </Field>
+            </div>
+            <div className="col-6 col-md-2">
+              <Field label="Monto hasta">
+                <div className="input-group">
+                  <span className="input-group-text">$</span>
+                  <input type="number" min="0" step="1" className={`form-control ${montoInvalido ? 'is-invalid' : ''}`}
+                    value={borrador.monto_hasta} onChange={set('monto_hasta')} />
+                </div>
+              </Field>
+            </div>
+            <div className="col-md-2">
+              <Field label="Sucursal">
+                <select className="form-select" value={borrador.sucursal_id} onChange={set('sucursal_id')}>
+                  <option value="">Todas</option>
+                  {catalogos?.sucursales?.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+          <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+            <button className={`btn ${pendiente ? 'btn-primary' : 'btn-outline-primary'}`} disabled={invalido}>
+              <i className="bi bi-search me-1" />Buscar
+            </button>
+            <button type="button" className="btn btn-outline-secondary" disabled={!hayFiltros} onClick={() => aplicar(FILTROS_VACIOS)}>Limpiar</button>
+            <span className="vr d-none d-md-inline mx-1" />
+            <span className="small text-muted">Compras de:</span>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => atajo(0)}>Hoy</button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => atajo(6)}>Últimos 7 días</button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => atajo(29)}>Últimos 30 días</button>
+            {fechaInvalida && <span className="text-danger small">"Desde" no puede ser posterior a "Hasta".</span>}
+            {montoInvalido && <span className="text-danger small">"Monto desde" no puede ser mayor que "Monto hasta".</span>}
+          </div>
+        </form>
+      </Filtros>
+
+      <ErrorAlert error={resultado.error} />
+      <Seccion titulo="Pedidos recientes que se pueden devolver" icono="bi-bag-check" plano>
+        {resultado.loading && !resultado.data ? <Spinner /> : (
+          <div className="table-responsive">
+            <table className="table table-hover align-middle">
+              <thead>
+                <tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Medio</th><th className="text-end">Cobrado</th><th>Plazo</th><th /></tr>
+              </thead>
+              <tbody>
+                {lista.length === 0 && (
+                  <tr><td colSpan="8" className="text-center text-muted py-4">
+                    No hay pedidos entregados {plazo ? `en los últimos ${plazo} días ` : ''}que coincidan con la búsqueda.
+                  </td></tr>
+                )}
+                {lista.map((p) => (
+                  <tr key={p.id}>
+                    <td className="font-monospace fw-semibold text-nowrap">{p.codigo}</td>
+                    <td className="text-nowrap">{fechaHora(p.fecha)}</td>
+                    <td>
+                      {p.nombre_cliente}
+                      {p.vendedor && <div className="small text-muted">atendió {p.vendedor}</div>}
+                    </td>
+                    <td>
+                      {p.productos.map((x, i) => (
+                        <span key={i}>{i > 0 && ', '}{x.nombre}{x.cantidad > 1 && <span className="text-muted"> ×{x.cantidad}</span>}</span>
+                      ))}
+                    </td>
+                    <td>{p.medios ?? '—'}</td>
+                    <td className="text-end fw-semibold text-nowrap">{money(p.cobrado)}</td>
+                    <td>
+                      {p.dias_restantes == null ? '—' : (
+                        <span className={`badge ${p.dias_restantes <= 3 ? 'text-bg-warning' : 'text-bg-secondary'}`}
+                          title="Días que quedan para devolver">{p.dias_restantes} día(s)</span>
+                      )}
+                    </td>
+                    <td className="text-end"><button type="button" className="btn btn-sm btn-primary" onClick={() => onElegir(p.id)}>Elegir</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Seccion>
     </>
   );
 }

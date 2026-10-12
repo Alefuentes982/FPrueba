@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { isoDate, money } from '../../format.js';
+import BuscadorProducto from '../../components/BuscadorProducto.jsx';
 import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 
 const lineaVacia = () => ({ producto_id: '', cantidad_solicitada: '1', costo_unitario: '' });
@@ -47,10 +48,11 @@ export default function OrdenCompraForm() {
 
   const setItem = (i, cambios) => setItems((l) => l.map((x, j) => (j === i ? { ...x, ...cambios } : x)));
 
-  const elegirProducto = (i, productoId) => {
-    const prod = base.data.productos.find((p) => p.id === productoId);
-    const costo = referenciales[productoId] ?? prod?.costo ?? '';
-    setItem(i, { producto_id: productoId, costo_unitario: String(costo) });
+  // Elegir un producto precarga su costo: el referencial del proveedor (★) o, si no tiene, el costo del producto.
+  const elegirProducto = (i, prod) => {
+    if (!prod) { setItem(i, { producto_id: '' }); return; }
+    const costo = referenciales[prod.id] ?? prod.costo ?? '';
+    setItem(i, { producto_id: prod.id, costo_unitario: String(costo) });
   };
 
   const neto = Math.round(items.reduce((s, x) => s + Number(x.cantidad_solicitada || 0) * Number(x.costo_unitario || 0), 0));
@@ -60,6 +62,8 @@ export default function OrdenCompraForm() {
   const guardar = async (e) => {
     e.preventDefault();
     const emitir = e.nativeEvent.submitter?.dataset.emitir === 'true';
+    const sinProducto = items.findIndex((x) => !x.producto_id);
+    if (sinProducto >= 0) { setError(new Error(`Elija el producto de la línea ${sinProducto + 1}.`)); return; }
     if (emitir && !window.confirm('Al emitir la orden ya no podrá modificarse. ¿Desea continuar?')) return;
     setError(null);
     setSaving(true);
@@ -96,7 +100,23 @@ export default function OrdenCompraForm() {
     );
   }
 
-  const usados = (actual) => base.data.productos.filter((p) => p.id === actual || !items.some((x) => x.producto_id === p.id));
+  // Productos que se pueden elegir en una línea: todos menos los que ya están en otras líneas.
+  const disponibles = (actual) => base.data.productos.filter((p) => p.id === actual || !items.some((x) => x.producto_id === p.id));
+  // Búsqueda local (la lista ya está cargada): por SKU o nombre, sin distinguir mayúsculas ni tildes.
+  const normalizar = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const buscarEn = (actual) => (q) => {
+    const t = normalizar(q.trim());
+    return Promise.resolve(disponibles(actual).filter((p) => !t || normalizar(p.sku).includes(t) || normalizar(p.nombre).includes(t)));
+  };
+  // Producto elegido en una línea. Si ya no está activo (borrador antiguo), se muestra con los datos guardados en la orden.
+  const productoDeLinea = (productoId) => {
+    if (!productoId) return null;
+    const p = base.data.productos.find((x) => x.id === productoId);
+    if (p) return p;
+    const linea = orden.data?.items.find((x) => x.producto_id === productoId);
+    return linea ? { id: productoId, sku: linea.sku, nombre: `${linea.producto} (inactivo)` } : { id: productoId, sku: '', nombre: 'Producto no disponible' };
+  };
+  const marcaReferencial = (p) => (referenciales[p.id] != null ? <span className="text-warning ms-1" title="El proveedor tiene costo referencial">★</span> : null);
 
   return (
     <>
@@ -128,19 +148,19 @@ export default function OrdenCompraForm() {
         </div>
 
         <h3 className="h5">Líneas</h3>
-        <div className="table-responsive">
+        <div className="table-responsive fc-tabla-buscador">
           <table className="table align-middle">
             <thead><tr><th style={{ minWidth: 280 }}>Producto</th><th style={{ width: 130 }}>Cantidad</th><th style={{ width: 160 }}>Costo unitario neto</th><th className="text-end">Subtotal</th><th /></tr></thead>
             <tbody>
               {items.map((x, i) => (
                 <tr key={i}>
                   <td>
-                    <select className="form-select" required value={x.producto_id} onChange={(e) => elegirProducto(i, e.target.value)}>
-                      <option value="">Seleccione…</option>
-                      {usados(x.producto_id).map((p) => (
-                        <option key={p.id} value={p.id}>{p.sku} — {p.nombre}{referenciales[p.id] != null ? ' ★' : ''}</option>
-                      ))}
-                    </select>
+                    <BuscadorProducto
+                      value={productoDeLinea(x.producto_id)}
+                      onChange={(p) => elegirProducto(i, p)}
+                      buscar={buscarEn(x.producto_id)}
+                      listarAlEnfocar max={500} marca={marcaReferencial} required
+                      placeholder="Escriba el SKU o el nombre, o despliegue la lista…" />
                   </td>
                   <td><input type="number" min="1" step="1" required className="form-control" value={x.cantidad_solicitada} onChange={(e) => setItem(i, { cantidad_solicitada: e.target.value })} /></td>
                   <td><input type="number" min="0" step="1" required className="form-control" value={x.costo_unitario} onChange={(e) => setItem(i, { costo_unitario: e.target.value })} /></td>
@@ -157,7 +177,7 @@ export default function OrdenCompraForm() {
         <button type="button" className="btn btn-outline-secondary btn-sm mb-2" onClick={() => setItems((l) => [...l, lineaVacia()])}>
           <i className="bi bi-plus" /> Agregar línea
         </button>
-        <div className="form-text mb-3">★ = el proveedor tiene costo referencial para ese producto (se precarga al elegirlo).</div>
+        <div className="form-text mb-3">Escriba el SKU o parte del nombre para filtrar la lista (↑ ↓ y Enter para elegir). ★ = el proveedor tiene costo referencial para ese producto (se precarga al elegirlo).</div>
 
         <div className="text-end mb-4">
           <div>Neto: <strong>{money(neto)}</strong></div>

@@ -110,3 +110,9 @@ form.fc-formulario { background: var(--fc-superficie); border: 1px solid var(--f
 .nav-tabs { border-bottom: 2px solid var(--fc-borde); }
 .nav-tabs .nav-link { font-weight: 600; color: #4b5563; }
 .nav-tabs .nav-link.active { color: var(--fc-primario); border-color: var(--fc-borde) var(--fc-borde) var(--fc-fondo); background: var(--fc-fondo); }
+
+/* Tablas con buscador de producto en sus filas (órdenes de compra): la lista de coincidencias puede salir de la tabla
+   en vez de quedar recortada por el desplazamiento horizontal. En pantallas chicas se mantiene el desplazamiento. */
+@media (min-width: 768px) {
+  .table-responsive.fc-tabla-buscador { overflow: visible; }
+}
