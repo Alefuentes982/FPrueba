@@ -1,4 +1,5 @@
 import { clp, fechaDMA, generarDocumentoPdf, pdfABuffer } from '../../core/documentos.js';
+import { cuerpoComprobante, enviarCorreo } from '../../core/correo.js';
 import { detalleDevolucion } from './servicio.js';
 
 // Comprobante de devolución (no es una nota de crédito tributaria), como JSON con el PDF en base64
@@ -33,4 +34,19 @@ export async function comprobanteDevolucion(db, id) {
   });
   const pdf = await pdfABuffer(doc);
   return { archivo: `${d.codigo}.pdf`, tipo: 'application/pdf', base64: pdf.toString('base64') };
+}
+
+// Envía el comprobante de devolución por correo, con el PDF adjunto.
+export async function enviarComprobanteDevolucion(db, id, correo) {
+  const d = await detalleDevolucion(db, id);
+  const { archivo, base64 } = await comprobanteDevolucion(db, id);
+  const { texto, html } = cuerpoComprobante({
+    nombre: d.nombre_cliente, documento: 'comprobante de devolución', codigo: d.codigo,
+    detalle: `pedido ${d.pedido_codigo}, ${clp(Number(d.total_reembolso) + Number(d.redondeo ?? 0))} devueltos`,
+  });
+  await enviarCorreo({
+    para: correo, asunto: `Comprobante de devolución ${d.codigo} · ${process.env.EMPRESA_NOMBRE || 'FarmaClick'}`, texto, html,
+    adjuntos: [{ filename: archivo, content: Buffer.from(base64, 'base64'), contentType: 'application/pdf' }],
+  });
+  return { enviado_a: correo, codigo: d.codigo };
 }

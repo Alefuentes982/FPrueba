@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool, withTx } from '../../core/db.js';
 import { rangoFechas } from '../../core/fechas.js';
 import { listResponse, paging, uuid } from '../../core/sql.js';
+import { excelListado, excelTurno } from './excel.js';
 import { informeTurno } from './informe.js';
 import { ESTADOS_TURNO, revisionSchema } from './esquemas.js';
 import { detalleTurno, esSupervisor, listarTurnos, resumenPeriodo, revisarTurno } from './servicio.js';
@@ -43,5 +44,9 @@ r.post('/turnos/:id/revision', async (req, res) => {
 });
 
 r.get('/turnos/:id/pdf', async (req, res) => res.json(await informeTurno(pool, uuid.parse(req.params.id), req.user)));
+
+// Excel (.xlsx): el listado con los mismos filtros de la pantalla, o la ficha de un turno.
+r.get('/exportar', async (req, res) => res.json(await excelListado(pool, req.user, filtros(req.query), rangoFechas(req.query))));
+r.get('/turnos/:id/excel', async (req, res) => res.json(await excelTurno(pool, uuid.parse(req.params.id), req.user)));
 
 export default r;

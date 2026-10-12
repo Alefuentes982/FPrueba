@@ -84,7 +84,7 @@ export default function ProductoForm() {
     <>
       <PageHeader title={editando ? 'Editar producto' : 'Nuevo producto'} />
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar}>
+      <form onSubmit={guardar} className="fc-formulario">
         <div className="row">
           <div className="col-md-4"><Field label="SKU"><input className="form-control" required maxLength={50} value={form.sku} onChange={set('sku')} /></Field></div>
           <div className="col-md-8"><Field label="Nombre"><input className="form-control" required maxLength={200} value={form.nombre} onChange={set('nombre')} /></Field></div>

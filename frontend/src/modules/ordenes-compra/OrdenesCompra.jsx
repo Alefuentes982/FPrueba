@@ -5,7 +5,7 @@ import { fechaCorta, money, soloFecha } from '../../format.js';
 import { descargarArchivo } from '../../archivos.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
 import { estadoOcClase } from './estados.js';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
 
@@ -31,20 +31,22 @@ export default function OrdenesCompra() {
       <PageHeader title="Órdenes de compra">
         <Link to="/ordenes-compra/nueva" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nueva orden</Link>
       </PageHeader>
-      <form className="row g-2 mb-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-6"><input className="form-control" placeholder="Buscar por N° (OC-000123) o proveedor" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-3">
-          <select className="form-select" value={estado} onChange={(e) => { setPage(1); setEstado(e.target.value); }}>
-            <option value="">Todos los estados</option>
-            {catalogos.data?.estados_orden_compra.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-6"><input className="form-control" placeholder="Buscar por N° (OC-000123) o proveedor" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-3">
+            <select className="form-select" value={estado} onChange={(e) => { setPage(1); setEstado(e.target.value); }}>
+              <option value="">Todos los estados</option>
+              {catalogos.data?.estados_orden_compra.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
+          <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
+        </form>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="small text-muted">Fecha de creación:</span>
+          <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={cambiarFechas} />
         </div>
-        <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
-      </form>
-      <div className="mb-3 d-flex align-items-center gap-2">
-        <span className="small text-muted">Fecha de creación:</span>
-        <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={cambiarFechas} />
-      </div>
+      </Filtros>
       {rangoInvalido && <div className="alert alert-warning py-2">La fecha "desde" no puede ser posterior a "hasta".</div>}
       <ErrorAlert error={error || pdfError} onClose={pdfError ? () => setPdfError(null) : undefined} />
       {loading ? <Spinner /> : (

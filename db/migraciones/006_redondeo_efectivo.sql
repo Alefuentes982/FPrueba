@@ -5,7 +5,7 @@
 --   * pedido.redondeo:     suma de los pagos aprobados = total + redondeo
 --   * devolucion.redondeo: suma de los reembolsos      = total_reembolso + redondeo
 -- transaccion_pago.monto en efectivo sigue siendo el monto realmente recibido, así el cierre de caja no cambia.
--- Idempotente. Ejecutar en el editor SQL de Supabase (en local, npm run migrar:local).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (en local, docker compose la aplica al crear la base; ver db/generar-instalacion.sh).
 -- =====================================================================
 BEGIN;
 

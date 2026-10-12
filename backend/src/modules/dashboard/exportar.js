@@ -1,6 +1,7 @@
 // Exportación de un informe a CSV o PDF. Como los demás documentos, el archivo viaja como JSON con base64
 // (los gestores de descarga como IDM interceptan application/pdf y text/csv y lo dejan vacío).
 import { clp, fechaDMA, generarDocumentoPdf, pdfABuffer } from '../../core/documentos.js';
+import { agregarHoja, libroAArchivo, nuevoLibro } from '../../core/excel.js';
 
 const entero = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 });
 const hora = () => new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'short', timeStyle: 'short' });
@@ -48,6 +49,15 @@ export async function archivoInforme(informe, formato, f) {
   const base = `${informe.id}${informe.fechas ? `_${f.desde ?? 'inicio'}_${f.hasta ?? 'hoy'}` : ''}`;
   if (formato === 'csv') {
     return { archivo: `${base}.csv`, tipo: 'text/csv', base64: Buffer.from(generarCsv(informe), 'utf8').toString('base64') };
+  }
+  if (formato === 'xlsx') {
+    const libro = nuevoLibro();
+    agregarHoja(libro, informe.titulo, {
+      titulo: `${informe.titulo} · ${informe.grupo}`,
+      contexto: [informe.fechas ? `Período: ${periodoTexto(f)}` : `Al ${fechaDMA(new Date())}`, `Sucursal: ${f.sucursal_nombre ?? 'Todas'}`, `Generado el ${hora()}`],
+      columnas: informe.columnas, filas: informe.filas,
+    });
+    return libroAArchivo(libro, `${base}.xlsx`);
   }
   const anchos = anchosColumnas(informe.columnas);
   const doc = generarDocumentoPdf({

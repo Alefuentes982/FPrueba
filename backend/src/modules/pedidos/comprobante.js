@@ -1,4 +1,5 @@
 import { clp, fechaDMA, generarDocumentoPdf, pdfABuffer } from '../../core/documentos.js';
+import { cuerpoComprobante, enviarCorreo } from '../../core/correo.js';
 import { detallePedido, ESTADO } from './servicio.js';
 
 // Comprobante del pedido (no es un documento tributario), como JSON con el PDF en base64: los gestores de descarga
@@ -45,4 +46,19 @@ export async function comprobantePedido(db, id) {
   });
   const pdf = await pdfABuffer(doc);
   return { archivo: `${p.codigo}.pdf`, tipo: 'application/pdf', base64: pdf.toString('base64') };
+}
+
+// Envía el comprobante del pedido por correo, con el PDF adjunto.
+export async function enviarComprobantePedido(db, id, correo) {
+  const p = await detallePedido(db, id);
+  const { archivo, base64 } = await comprobantePedido(db, id);
+  const { texto, html } = cuerpoComprobante({
+    nombre: p.nombre_cliente, documento: 'comprobante de su compra', codigo: p.codigo,
+    detalle: `total ${clp(Number(p.total) + Number(p.redondeo ?? 0))}`,
+  });
+  await enviarCorreo({
+    para: correo, asunto: `Comprobante ${p.codigo} · ${process.env.EMPRESA_NOMBRE || 'FarmaClick'}`, texto, html,
+    adjuntos: [{ filename: archivo, content: Buffer.from(base64, 'base64'), contentType: 'application/pdf' }],
+  });
+  return { enviado_a: correo, codigo: p.codigo };
 }

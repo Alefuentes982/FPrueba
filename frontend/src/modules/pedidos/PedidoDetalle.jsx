@@ -6,7 +6,8 @@ import { Slot } from '../../extensiones.jsx';
 import { fechaHora, money } from '../../format.js';
 import { textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
-import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import EnviarCorreo from '../../components/EnviarCorreo.jsx';
+import { ErrorAlert, Ficha, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 import { estadoPedidoClase } from './estados.js';
 
 export default function PedidoDetalle() {
@@ -92,63 +93,81 @@ export default function PedidoDetalle() {
         </div>
       )}
 
-      <div className="row mb-3">
-        <div className="col-md-7">
-          <dl className="row mb-0">
-            <dt className="col-sm-4">Estado</dt><dd className="col-sm-8"><span className={`badge text-bg-${estadoPedidoClase[p.estado] ?? 'light'}`}>{p.estado}</span></dd>
-            <dt className="col-sm-4">Cliente</dt><dd className="col-sm-8">{p.nombre_cliente}{p.telefono && <span className="text-muted"> · {p.telefono}</span>}</dd>
-            <dt className="col-sm-4">Entrega</dt><dd className="col-sm-8">{[p.direccion_pedido, p.comuna].filter(Boolean).join(', ') || '—'}</dd>
-            <dt className="col-sm-4">Sucursal</dt><dd className="col-sm-8">{p.sucursal ?? '—'}</dd>
-            <dt className="col-sm-4">Canal</dt><dd className="col-sm-8">{p.canal}</dd>
-            <dt className="col-sm-4">Creado</dt><dd className="col-sm-8">{fechaHora(p.fecha)}{p.vendedor && ` por ${p.vendedor}`}</dd>
-          </dl>
+      <div className="row g-3">
+        <div className="col-lg-7">
+          <Seccion titulo="Datos del pedido" icono="bi-info-circle">
+            <Ficha filas={[
+              ['Estado', <span className={`badge text-bg-${estadoPedidoClase[p.estado] ?? 'light'}`}>{p.estado}</span>],
+              ['Cliente', <>{p.nombre_cliente}{p.telefono && <span className="text-muted"> · {p.telefono}</span>}</>],
+              ['Entrega', [p.direccion_pedido, p.comuna].filter(Boolean).join(', ') || '—'],
+              ['Sucursal', p.sucursal ?? '—'],
+              ['Canal', p.canal],
+              ['Creado', `${fechaHora(p.fecha)}${p.vendedor ? ` por ${p.vendedor}` : ''}`],
+            ]} />
+          </Seccion>
         </div>
-        <div className="col-md-5 text-md-end">
-          <div>Subtotal: <strong>{money(p.subtotal_bruto)}</strong></div>
-          {p.descuento_total > 0 && <div className="text-success">Descuentos: <strong>-{money(p.descuento_total)}</strong></div>}
-          <div className="text-muted small">Neto {money(p.subtotal_neto)} · IVA {money(p.iva)}</div>
-          <div className="fs-4">Total: <strong>{money(p.total)}</strong></div>
-          {Number(p.redondeo) !== 0 && (
-            <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(p.redondeo), money)}</strong> · Total cobrado <strong>{money(Number(p.total) + Number(p.redondeo))}</strong></div>
-          )}
+        <div className="col-lg-5">
+          <Seccion titulo="Totales" icono="bi-receipt">
+            <div className="fc-total-bloque">
+              <div>Subtotal: <strong>{money(p.subtotal_bruto)}</strong></div>
+              {p.descuento_total > 0 && <div className="text-success">Descuentos: <strong>-{money(p.descuento_total)}</strong></div>}
+              <div className="text-muted small">Neto {money(p.subtotal_neto)} · IVA {money(p.iva)}</div>
+              <div className="fc-total-importe">{money(p.total)}</div>
+              {Number(p.redondeo) !== 0 && (
+                <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(p.redondeo), money)}</strong>
+                  <br />Total cobrado <strong>{money(Number(p.total) + Number(p.redondeo))}</strong></div>
+              )}
+            </div>
+          </Seccion>
         </div>
       </div>
 
-      <div className="table-responsive">
-        <table className="table align-middle">
-          <thead><tr><th>SKU</th><th>Producto</th><th className="text-end">Cant.</th><th className="text-end">Precio unit.</th><th className="text-end">Descuento</th><th className="text-end">Subtotal</th></tr></thead>
-          <tbody>
-            {p.lineas.map((l) => (
-              <tr key={l.id}>
-                <td>{l.sku}</td><td>{l.nombre_producto}{l.regla && <span className="badge text-bg-success ms-2">{l.regla}</span>}</td>
-                <td className="text-end">{l.cantidad}</td><td className="text-end">{money(l.precio_unitario)}</td>
-                <td className="text-end">{Number(l.descuento_monto) ? `-${money(l.descuento_monto)}` : '—'}</td>
-                <td className="text-end">{money(l.subtotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Seccion titulo="Productos" icono="bi-box-seam" plano>
+        <div className="table-responsive">
+          <table className="table align-middle">
+            <thead><tr><th>SKU</th><th>Producto</th><th className="text-end">Cant.</th><th className="text-end">Precio unit.</th><th className="text-end">Descuento</th><th className="text-end">Subtotal</th></tr></thead>
+            <tbody>
+              {p.lineas.map((l) => (
+                <tr key={l.id}>
+                  <td className="text-nowrap">{l.sku}</td><td>{l.nombre_producto}{l.regla && <span className="badge text-bg-success ms-2">{l.regla}</span>}</td>
+                  <td className="text-end">{l.cantidad}</td><td className="text-end">{money(l.precio_unitario)}</td>
+                  <td className="text-end">{Number(l.descuento_monto) ? `-${money(l.descuento_monto)}` : '—'}</td>
+                  <td className="text-end">{money(l.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Seccion>
 
       {cobrando && (
         <PanelPago total={Number(p.total)} medios={medios} busy={busy} onConfirmar={confirmarPago} onCancelar={() => setCobrando(false)}
           ayuda="Si el pedido aún no tiene stock reservado, se reserva al confirmar el pago." />
       )}
 
-      <h3 className="h5">Pagos</h3>
-      {p.pagos.length === 0 ? <p className="text-muted">Sin pagos registrados.</p> : (
-        <table className="table table-sm">
-          <thead><tr><th>Fecha</th><th>Medio</th><th>Autorización</th><th>Estado</th><th className="text-end">Monto</th></tr></thead>
-          <tbody>
-            {p.pagos.map((x) => (
-              <tr key={x.id}>
-                <td>{fechaHora(x.fecha_transaccion)}</td><td>{x.medio_pago}</td><td>{x.codigo_autorizacion ?? '—'}</td>
-                <td><span className={`badge text-bg-${x.estado === 'Aprobado' ? 'success' : 'secondary'}`}>{x.estado}</span></td>
-                <td className="text-end">{money(x.monto)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Seccion titulo="Pagos" icono="bi-cash-coin" plano={p.pagos.length > 0}>
+        {p.pagos.length === 0 ? <span className="text-muted">Sin pagos registrados.</span> : (
+          <div className="table-responsive">
+            <table className="table table-sm">
+              <thead><tr><th>Fecha</th><th>Medio</th><th>Autorización</th><th>Estado</th><th className="text-end">Monto</th></tr></thead>
+              <tbody>
+                {p.pagos.map((x) => (
+                  <tr key={x.id}>
+                    <td>{fechaHora(x.fecha_transaccion)}</td><td>{x.medio_pago}</td><td>{x.codigo_autorizacion ?? '—'}</td>
+                    <td><span className={`badge text-bg-${x.estado === 'Aprobado' ? 'success' : 'secondary'}`}>{x.estado}</span></td>
+                    <td className="text-end">{money(x.monto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Seccion>
+
+      {['Pagado', 'En preparación', 'Listo para retiro', 'En despacho', 'Entregado'].includes(p.estado) && (
+        <Seccion titulo="Enviar comprobante por correo" icono="bi-envelope">
+          <EnviarCorreo ruta={`/pedidos/${id}/enviar`} />
+        </Seccion>
       )}
 
       {/* Otros módulos (p. ej. devoluciones) agregan aquí sus secciones. */}

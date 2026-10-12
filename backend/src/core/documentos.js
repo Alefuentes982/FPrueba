@@ -105,16 +105,27 @@ export function generarDocumentoPdf(d) {
   });
   doc.moveTo(MARGEN, doc.y).lineTo(MARGEN + ancho, doc.y).strokeColor(COLOR.linea).stroke();
 
-  // Totales (a la derecha)
-  if (doc.y + d.totales.length * 18 + 20 > limite()) { doc.addPage(); doc.y = MARGEN; }
+  // Totales (a la derecha). La etiqueta ocupa la mitad del ancho (alineada a la derecha, junto al valor) y cada fila
+  // mide lo que necesite su texto: una etiqueta larga, como "Ajuste por redondeo (Ley 20.956)", no pisa a la siguiente.
+  const xEtiqueta = MARGEN + ancho * 0.3;
+  const anchoEtiqueta = ancho * 0.5;
+  const xValor = MARGEN + ancho * 0.8;
+  const anchoValor = ancho * 0.2;
+  const altoFila = (etiqueta, valor, ultimo) => {
+    doc.font(ultimo ? 'Helvetica-Bold' : 'Helvetica').fontSize(ultimo ? 12 : 10);
+    return Math.max(doc.heightOfString(etiqueta, { width: anchoEtiqueta }), doc.heightOfString(valor, { width: anchoValor })) + (ultimo ? 8 : 5);
+  };
+  const altoTotales = d.totales.reduce((s, [e, v], i) => s + altoFila(e, v, i === d.totales.length - 1), 0);
+  if (doc.y + altoTotales + 20 > limite()) { doc.addPage(); doc.y = MARGEN; }
   doc.y += 10;
   d.totales.forEach(([etiqueta, valor], i) => {
     const ultimo = i === d.totales.length - 1;
+    const alto = altoFila(etiqueta, valor, ultimo);
     const y = doc.y;
     doc.font(ultimo ? 'Helvetica-Bold' : 'Helvetica').fontSize(ultimo ? 12 : 10).fillColor(COLOR.texto);
-    doc.text(etiqueta, MARGEN + ancho * 0.55, y, { width: ancho * 0.25, align: 'right' });
-    doc.text(valor, MARGEN + ancho * 0.8, y, { width: ancho * 0.2, align: 'right' });
-    doc.y = y + (ultimo ? 20 : 16);
+    doc.text(etiqueta, xEtiqueta, y, { width: anchoEtiqueta, align: 'right' });
+    doc.text(valor, xValor, y, { width: anchoValor, align: 'right' });
+    doc.y = y + alto;
   });
 
   if (d.nota) {

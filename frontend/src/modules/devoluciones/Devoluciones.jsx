@@ -4,7 +4,7 @@ import { api, qs } from '../../api.js';
 import { descargarArchivo } from '../../archivos.js';
 import { fechaHora, money } from '../../format.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
 
@@ -28,20 +28,22 @@ export default function Devoluciones() {
       <PageHeader title="Devoluciones">
         <Link to="/devoluciones/nueva" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nueva devolución</Link>
       </PageHeader>
-      <form className="row g-2 mb-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-6"><input className="form-control" placeholder="N° de devolución (DEV-000012), de pedido (PED-000123) o cliente" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-4">
-          <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
-            <option value="">Todas las sucursales</option>
-            {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-6"><input className="form-control" placeholder="N° de devolución (DEV-000012), de pedido (PED-000123) o cliente" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-4">
+            <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
+              <option value="">Todas las sucursales</option>
+              {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
+          <div className="col-md-2"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
+        </form>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="small text-muted">Fecha:</span>
+          <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
         </div>
-        <div className="col-md-2"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
-      </form>
-      <div className="mb-3 d-flex align-items-center gap-2">
-        <span className="small text-muted">Fecha:</span>
-        <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
-      </div>
+      </Filtros>
       {rangoInvalido && <div className="alert alert-warning py-2">La fecha "desde" no puede ser posterior a "hasta".</div>}
       <ErrorAlert error={error || actionError} onClose={actionError ? () => setActionError(null) : undefined} />
       {loading && !data ? <Spinner /> : (

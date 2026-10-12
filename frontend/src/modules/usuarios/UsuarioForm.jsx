@@ -51,7 +51,7 @@ export default function UsuarioForm() {
     <>
       <PageHeader title={editando ? 'Editar usuario' : 'Nuevo usuario'} />
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar} style={{ maxWidth: 640 }}>
+      <form onSubmit={guardar} className="fc-formulario" style={{ maxWidth: 640 }}>
         <Field label="Nombre"><input className="form-control" required maxLength={150} value={form.nombre} onChange={set('nombre')} /></Field>
         <Field label="Correo (es el usuario de acceso)"><input type="email" className="form-control" required maxLength={150} value={form.correo} onChange={set('correo')} /></Field>
         <Field label={editando ? 'Nueva contraseña' : 'Contraseña'} hint={editando ? 'Déjela vacía para no cambiarla. Mínimo 8 caracteres.' : 'Mínimo 8 caracteres.'}>

@@ -41,7 +41,7 @@ export default function ProveedorForm() {
     <>
       <PageHeader title={editando ? 'Editar proveedor' : 'Nuevo proveedor'} />
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar} className="mb-4" style={{ maxWidth: 640 }}>
+      <form onSubmit={guardar} className="fc-formulario mb-4" style={{ maxWidth: 640 }}>
         <Field label="Nombre"><input className="form-control" required maxLength={150} value={form.nombre} onChange={set('nombre')} /></Field>
         <Field label="RUT" hint="Se valida el dígito verificador. Ej: 76.086.428-5">
           <input className="form-control" required maxLength={12} value={form.rut} onChange={set('rut')} />

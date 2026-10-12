@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { pool, withTx } from '../../core/db.js';
 import { condicionRango, rangoFechas } from '../../core/fechas.js';
 import { likeParam, listResponse, paging, uuid } from '../../core/sql.js';
-import { comprobantePedido } from './comprobante.js';
+import { correoSchema } from '../../core/correo.js';
+import { comprobantePedido, enviarComprobantePedido } from './comprobante.js';
 import { estadoSchema, pagosSchema, pedidoSchema } from './esquemas.js';
 import {
   buscarProductosVendibles, cambiarEstado, cancelarPedido, codigoPedido, crearPedido, detallePedido, expirarPendientes,
@@ -86,6 +87,12 @@ r.post('/:id/estado', async (req, res) => {
 r.post('/:id/cancelar', async (req, res) => {
   await withTx(req.usuarioId, (db) => cancelarPedido(db, req.params.id));
   res.json(await detallePedido(pool, req.params.id));
+});
+
+// Envía el comprobante por correo (PDF adjunto) a la dirección indicada.
+r.post('/:id/enviar', async (req, res) => {
+  const { correo } = correoSchema.parse(req.body);
+  res.json(await enviarComprobantePedido(pool, uuid.parse(req.params.id), correo));
 });
 
 r.get('/:id/pdf', async (req, res) => {

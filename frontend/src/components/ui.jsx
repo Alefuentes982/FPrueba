@@ -39,10 +39,49 @@ export const Spinner = () => (
 
 export function PageHeader({ title, children }) {
   return (
-    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-      <h2 className="h4 mb-0">{title}</h2>
-      <div className="d-flex gap-2">{children}</div>
+    <div className="fc-pagina-cabecera">
+      <h1 className="fc-pagina-titulo">{title}</h1>
+      <div className="fc-pagina-acciones">{children}</div>
     </div>
+  );
+}
+
+// Bloque de información con cabecera propia: delimita dónde empieza y termina cada sección de una pantalla.
+//   titulo, icono ('bi-…'), acciones (botones a la derecha de la cabecera), plano (sin margen interior: para tablas),
+//   pie (texto bajo el contenido).
+export function Seccion({ titulo, icono, acciones, plano, pie, className = '', children }) {
+  return (
+    <section className={`fc-seccion ${className}`}>
+      {(titulo || acciones) && (
+        <div className="fc-seccion-cabecera">
+          <h2 className="fc-seccion-titulo">{icono && <i className={`bi ${icono}`} />}{titulo}</h2>
+          {acciones && <div className="d-flex flex-wrap gap-2">{acciones}</div>}
+        </div>
+      )}
+      <div className={`fc-seccion-cuerpo ${plano ? 'fc-plano' : ''}`}>{children}</div>
+      {pie && <div className="fc-seccion-pie">{pie}</div>}
+    </section>
+  );
+}
+
+// Barra de filtros de un listado: una tarjeta que agrupa los controles de búsqueda.
+export function Filtros({ titulo = 'Filtros', children }) {
+  return (
+    <div className="fc-filtros">
+      {titulo && <div className="fc-filtros-titulo"><i className="bi bi-funnel me-1" />{titulo}</div>}
+      {children}
+    </div>
+  );
+}
+
+// Pares etiqueta / valor (datos de un pedido, un turno, una orden…). filas: [[etiqueta, valor]]; las vacías se omiten.
+export function Ficha({ filas }) {
+  return (
+    <dl className="fc-ficha">
+      {filas.filter(([, v]) => v !== false && v != null).map(([k, v]) => (
+        <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+      ))}
+    </dl>
   );
 }
 

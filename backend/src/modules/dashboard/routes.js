@@ -45,10 +45,10 @@ r.get('/informes/:id', async (req, res) => {
   res.json(await ejecutarInforme(pool, informe, await filtros(req.query)));
 });
 
-// ?formato=csv|pdf. Exporta todas las filas (hasta 1000), no solo las que muestra la pantalla.
+// ?formato=csv|pdf|xlsx. Exporta todas las filas (hasta 1000), no solo las que muestra la pantalla.
 r.get('/informes/:id/exportar', async (req, res) => {
   const informe = informeVisible(req);
-  const formato = z.enum(['csv', 'pdf']).parse(req.query.formato);
+  const formato = z.enum(['csv', 'pdf', 'xlsx']).parse(req.query.formato);
   const f = await filtros({ ...req.query, limite: 1000 });
   res.json(await archivoInforme(await ejecutarInforme(pool, informe, f), formato, f));
 });

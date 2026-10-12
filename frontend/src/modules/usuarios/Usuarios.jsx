@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, qs } from '../../api.js';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
 
@@ -18,10 +18,12 @@ export default function Usuarios() {
         <Link to="/usuarios/roles" className="btn btn-outline-secondary"><i className="bi bi-shield-lock me-1" />Roles y permisos</Link>
         <Link to="/usuarios/nuevo" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nuevo usuario</Link>
       </PageHeader>
-      <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-9"><input className="form-control" placeholder="Buscar por nombre o correo" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
-      </form>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-9"><input className="form-control" placeholder="Buscar por nombre o correo" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
+        </form>
+      </Filtros>
       <ErrorAlert error={error} />
       {loading ? <Spinner /> : (
         <>

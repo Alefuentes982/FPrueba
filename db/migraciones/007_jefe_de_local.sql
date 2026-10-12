@@ -4,7 +4,7 @@
 -- lo podía quien administraba usuarios. Se separa en un permiso propio, `supervision_caja`, que tienen el
 -- Administrador y el nuevo rol "Jefe de local", sin darle a este la gestión de usuarios.
 -- El rol Jefe de local trae permisos de operación; se pueden ajustar en "Roles y permisos".
--- Idempotente. Ejecutar en el editor SQL de Supabase (en local, npm run migrar:local).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (en local, docker compose la aplica al crear la base; ver db/generar-instalacion.sh).
 -- =====================================================================
 BEGIN;
 

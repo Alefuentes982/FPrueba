@@ -1,51 +1,36 @@
 # FarmaClick
 
-Sistema de gestión para farmacias (proyecto de título MediFarm × D-Software): abastecimiento, inventario, venta presencial con cuadratura de caja y reportes. La venta en línea (tienda y Webpay) es la etapa siguiente.
+Sistema de gestión para farmacias: abastecimiento, inventario, venta presencial con cuadratura de caja y reportes.
 
-- `backend/` — API Node.js 22 + Express sobre PostgreSQL. Un módulo por carpeta en `src/modules/`; lo compartido en `src/core/`.
-- `frontend/` — React + Vite + Bootstrap. Misma organización en `src/modules/`.
-- `db/` — esquema base, migraciones `001`–`008` e `instalacion_completa.sql` (todo en un archivo; se regenera con `db/generar-instalacion.sh`). `desarrollo.sql` solo se usa en el entorno Docker local.
-- `deploy/` y `.github/workflows/` — despliegue en Oracle Cloud (Docker Compose) e integración continua.
-- `docs/guia-despliegue.md` — guía paso a paso: Docker local, GitHub, Supabase, Oracle Cloud.
+| Capa | Tecnología | Carpeta |
+|---|---|---|
+| API | Node.js 22 + Express | `backend/` (módulos en `src/modules/`, compartido en `src/core/`) |
+| Web | React + Vite + Bootstrap, servida por Nginx | `frontend/` |
+| Base de datos | PostgreSQL 16 (Supabase en dev y prod) | `db/` |
+| Despliegue | Docker, GitHub Actions → GHCR → Oracle Cloud | `.github/workflows/`, `deploy/` |
 
-## Desarrollo local con Docker
-Requisitos: Docker Desktop y Git. Nada más (no hace falta instalar Node ni PostgreSQL).
+## Desarrollo local
+Requisitos: Docker y Git.
 
 ```bash
-git clone https://github.com/<organizacion>/farmaclick.git && cd farmaclick
 docker compose up
 ```
-Abre http://localhost:5173. Usuarios de desarrollo: `admin@farmaclick.local` / `Admin12345` y `vendedor@farmaclick.local` / `Vendedor12345`.
-La primera vez se crea la base con el esquema, un catálogo de 90 productos y los usuarios. Para empezar de cero: `docker compose down -v && docker compose up`.
-La API queda en http://localhost:3000/api/health y PostgreSQL en `localhost:54329` (usuario `postgres`, clave `postgres`, base `farmaclick`). Las pruebas: `docker compose exec api npm test`.
+- Web: http://localhost:5173 · API: http://localhost:3000/api/health · PostgreSQL: `localhost:54329` (`postgres` / `postgres`, base `farmaclick`).
+- Usuarios de desarrollo: `admin@farmaclick.local` / `Admin12345` y `vendedor@farmaclick.local` / `Vendedor12345`.
+- Pruebas: `docker compose exec api npm test`. Base desde cero: `docker compose down -v`.
+- El login local (`AUTH_MODE=local`) solo existe en desarrollo; la API no arranca con él si `NODE_ENV=production`.
+- Correo opcional en local: crear `backend/.env` con las variables `SMTP_*` de `backend/.env.example`.
 
-El login local (`AUTH_MODE=local`) solo existe para desarrollo y la API se niega a arrancar con él en producción. En Supabase la autenticación es la real.
+## Flujo de trabajo
+- Ramas: `main` = producción, `develop` = dev/staging, `feature/<nombre>` = cada cambio, con Pull Request hacia `develop`.
+- CI (`ci.yml`) en cada Pull Request: control de secretos, pruebas del backend, esquema + migraciones sobre PostgreSQL limpio y compilación del frontend.
+- Push a `develop` / `main`: imágenes `linux/amd64` en GHCR (etiquetas `dev` / `prod`) y despliegue por SSH en la VM del entorno.
+- Cambios de base de datos: migración nueva e idempotente en `db/migraciones/`, luego `db/generar-instalacion.sh`, y aplicarla en el SQL Editor de Supabase de cada entorno (el despliegue no toca la base).
 
-## Módulos
-| Módulo | Qué hace | Migración |
-|---|---|---|
-| Base y acceso | Login con Supabase Auth, sesión, permisos por módulo | — |
-| Usuarios y permisos | Personal, roles y matriz de permisos | — |
-| Proveedores | CRUD con validación de RUT | — |
-| Productos | CRUD, margen, precio calculado por la base, proveedores por producto | — |
-| Órdenes de compra | Borrador → emitida → recepción total o parcial (lotes, kardex, PMP), PDF | 001 |
-| Inventario | Stock por sucursal, lotes y vencimientos, kardex, ajustes y mermas | 002 |
-| Pedidos | Núcleo de venta de todos los canales: reserva FEFO, pago dividido, estados, comprobante | 003 |
-| Caja y venta presencial | Turnos, venta en mostrador, cierre ciego | — |
-| Devoluciones | Reembolso prorrateado, reingreso opcional de stock, comprobante | 004, 006 |
-| Cuadratura de caja | Historial de turnos, revisión por supervisión, Cierre Z / reporte X | 005 |
-| Dashboard y reportes | Ventas, inventario y compras con exportación CSV y PDF | — |
-| Jefe de local | Rol con permisos de operación y supervisión de caja | 007 |
+## Configuración
+- Plantillas: `backend/.env.example` (API) y `deploy/.env.example` (`.env` de cada VM, `chmod 600`).
+- Secretos de GitHub Actions: `DEV_VM_HOST`, `DEV_VM_USER`, `DEV_VM_SSH_KEY`, `PROD_VM_HOST`, `PROD_VM_USER`, `PROD_VM_SSH_KEY`. Variables: `URL_DEV`, `URL_PROD`.
+- Ningún secreto va al repositorio. `_privado/` está ignorada por Git y la CI rechaza archivos `.env` reales o credenciales.
 
-Cada módulo se registra en `backend/src/modules/index.js` y `frontend/src/modules/index.js`; sumar uno es crear su carpeta y agregarlo ahí. Los permisos se leen de la base en cada request.
-
-## Flujo de trabajo en equipo
-- `main` = producción, `develop` = dev/staging, `feature/<nombre>` = cada funcionalidad. Se trabaja en una rama `feature/*`, se abre un Pull Request hacia `develop` y se fusiona cuando pasa la integración continua.
-- Al fusionar en `develop` se construyen las imágenes `dev` y se despliegan solas en la VM de dev. Un Pull Request de `develop` hacia `main` publica y despliega producción (pide aprobación).
-- Cualquier cambio de base de datos va en una migración nueva en `db/migraciones/` (idempotente); luego `./db/generar-instalacion.sh`.
-
-## Despliegue
-GitHub Actions (`ci.yml`): pruebas del backend, esquema SQL aplicado sobre PostgreSQL 16 limpio, compilación del frontend, imágenes `linux/arm64` hacia GitHub Container Registry y despliegue por SSH a la VM de Oracle Cloud del entorno. `mantener-activo.yml` consulta `/api/health/db` cada 3 días para que Supabase (plan gratuito) no pause el proyecto. Detalle y configuración en `docs/guia-despliegue.md`.
-
-## Variables de entorno
-Backend: `backend/.env.example`. Producción: `deploy/.env.example` (se copia como `.env` en cada VM, nunca a Git). La clave `SUPABASE_SERVICE_ROLE_KEY` solo vive en el backend.
+## Contribuir
+Ramas, commits, migraciones y Pull Requests: ver [`CONTRIBUTING.md`](CONTRIBUTING.md). Al abrir un Pull Request se carga la plantilla `.github/pull_request_template.md`, y `.github/CODEOWNERS` asigna a quién revisa cada parte.

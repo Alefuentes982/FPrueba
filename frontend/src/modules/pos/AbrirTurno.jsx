@@ -29,7 +29,7 @@ export default function AbrirTurno({ onAbierto }) {
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <h2 className="h4">Abrir turno de caja</h2>
+      <h1 className="fc-pagina-titulo mb-2">Abrir turno de caja</h1>
       <p className="text-muted">Para vender en el mostrador primero se abre un turno con el efectivo inicial de la caja.</p>
       <ErrorAlert error={cajas.error || error} onClose={() => setError(null)} />
       {cajas.data?.length === 0 ? (
@@ -38,7 +38,7 @@ export default function AbrirTurno({ onAbierto }) {
           {can('usuarios') ? <Link to="/pos/cajas">Configurar cajas</Link> : 'Pida a un administrador que cree una caja.'}
         </div>
       ) : (
-        <form onSubmit={abrir}>
+        <form onSubmit={abrir} className="fc-formulario">
           <Field label="Caja">
             <select className="form-select" required value={cajaId} onChange={(e) => setCajaId(e.target.value)}>
               <option value="">Seleccione…</option>

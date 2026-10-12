@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { pool, withTx } from '../../core/db.js';
 import { HttpError, notFound } from '../../core/errors.js';
 import { paging, uuid } from '../../core/sql.js';
-import { comprobantePedido } from '../pedidos/comprobante.js';
+import { correoSchema } from '../../core/correo.js';
+import { comprobantePedido, enviarComprobantePedido } from '../pedidos/comprobante.js';
 import {
   buscarProductosVendibles, codigoPedido, cotizar, crearPedido, detallePedido, entregarEnMostrador, registrarPagos,
 } from '../pedidos/servicio.js';
@@ -90,6 +91,15 @@ r.get('/ventas/:id/pdf', async (req, res) => {
   const { rows } = await pool.query('SELECT turno_caja_id FROM pedido WHERE id = $1', [req.params.id]);
   if (!rows[0]?.turno_caja_id) throw notFound('Venta');
   res.json(await comprobantePedido(pool, req.params.id));
+});
+
+// Envía por correo el comprobante de una venta de caja.
+r.post('/ventas/:id/enviar', async (req, res) => {
+  const { correo } = correoSchema.parse(req.body);
+  uuid.parse(req.params.id);
+  const { rows } = await pool.query('SELECT turno_caja_id FROM pedido WHERE id = $1', [req.params.id]);
+  if (!rows[0]?.turno_caja_id) throw notFound('Venta');
+  res.json(await enviarComprobantePedido(pool, req.params.id, correo));
 });
 
 // ---- Cajas -----------------------------------------------------------------

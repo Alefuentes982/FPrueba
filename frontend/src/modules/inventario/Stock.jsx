@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { soloFecha } from '../../format.js';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 import Pestanas from './Pestanas.jsx';
 
 const LIMIT = 15;
@@ -42,22 +42,24 @@ export default function Stock() {
     <>
       <PageHeader title="Inventario" />
       <Pestanas />
-      <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-5"><input className="form-control" placeholder="Buscar por SKU o nombre" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-3">
-          <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
-            <option value="">Todas las sucursales</option>
-            {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </div>
-        <div className="col-md-2 d-flex align-items-center">
-          <div className="form-check">
-            <input id="bajo" type="checkbox" className="form-check-input" checked={soloBajo} onChange={(e) => { setPage(1); setSoloBajo(e.target.checked); }} />
-            <label htmlFor="bajo" className="form-check-label">Bajo mínimo</label>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-5"><input className="form-control" placeholder="Buscar por SKU o nombre" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-3">
+            <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
+              <option value="">Todas las sucursales</option>
+              {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
           </div>
-        </div>
-        <div className="col-md-2"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
-      </form>
+          <div className="col-md-2 d-flex align-items-center">
+            <div className="form-check">
+              <input id="bajo" type="checkbox" className="form-check-input" checked={soloBajo} onChange={(e) => { setPage(1); setSoloBajo(e.target.checked); }} />
+              <label htmlFor="bajo" className="form-check-label">Bajo mínimo</label>
+            </div>
+          </div>
+          <div className="col-md-2"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
+        </form>
+      </Filtros>
 
       <ErrorAlert error={error || actionError} onClose={actionError ? () => setActionError(null) : undefined} />
       {loading && !data ? <Spinner /> : (

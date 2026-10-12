@@ -4,6 +4,7 @@ import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { fechaHora, money } from '../../format.js';
 import { textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
+import EnviarCorreo from '../../components/EnviarCorreo.jsx';
 import { ErrorAlert } from '../../components/ui.jsx';
 
 // Pantalla de venta: buscador por SKU o nombre (admite lector de código: escribe el SKU y Enter), carrito con
@@ -117,9 +118,13 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
           )}
           {hecha.vuelto != null && hecha.vuelto > 0 && <div className="fs-3 text-primary">Vuelto: {money(hecha.vuelto)}</div>}
           <div className="text-muted mb-4">{p.pagos.map((x) => `${x.medio_pago} ${money(x.monto)}`).join(' · ')}</div>
-          <div className="d-flex gap-2 justify-content-center">
+          <div className="d-flex flex-wrap gap-2 justify-content-center">
             <BotonesDocumento path={`/pos/ventas/${p.id}/pdf`} nombre={`${p.codigo}.pdf`} onError={setError} etiquetaVer="Ver comprobante" />
             <button className="btn btn-primary" autoFocus onClick={nuevaVenta}>Nueva venta</button>
+          </div>
+          <div className="mt-4 mx-auto text-start" style={{ maxWidth: 560 }}>
+            <div className="small text-muted mb-1">Enviar el comprobante por correo (opcional)</div>
+            <EnviarCorreo ruta={`/pos/ventas/${p.id}/enviar`} />
           </div>
           <ErrorAlert error={error} />
         </div>

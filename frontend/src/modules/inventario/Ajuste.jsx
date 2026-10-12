@@ -85,7 +85,7 @@ export default function Ajuste() {
       <Pestanas />
       <p className="text-muted">Los ajustes quedan en el kardex con su motivo y su autor; no se pueden editar ni borrar después. Para corregir uno se registra otro en sentido contrario.</p>
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar} style={{ maxWidth: 760 }}>
+      <form onSubmit={guardar} className="fc-formulario" style={{ maxWidth: 760 }}>
         <div className="row">
           <div className="col-md-6">
             <Field label="Sucursal">

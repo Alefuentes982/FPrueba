@@ -4,7 +4,8 @@ import { api } from '../../api.js';
 import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { fechaHora, money } from '../../format.js';
 import { textoAjuste } from '../../redondeo.js';
-import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import EnviarCorreo from '../../components/EnviarCorreo.jsx';
+import { ErrorAlert, Ficha, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function DevolucionDetalle() {
   const { id } = useParams();
@@ -30,44 +31,62 @@ export default function DevolucionDetalle() {
       )}
       <ErrorAlert error={actionError} onClose={() => setActionError(null)} />
 
-      <div className="row mb-3">
-        <div className="col-md-7">
-          <dl className="row mb-0">
-            <dt className="col-sm-4">Pedido</dt><dd className="col-sm-8"><Link to={`/pedidos/${d.pedido_id}`}>{d.pedido_codigo}</Link></dd>
-            <dt className="col-sm-4">Cliente</dt><dd className="col-sm-8">{d.nombre_cliente}</dd>
-            <dt className="col-sm-4">Sucursal</dt><dd className="col-sm-8">{d.sucursal ?? '—'}</dd>
-            <dt className="col-sm-4">Fecha</dt><dd className="col-sm-8">{fechaHora(d.fecha)} · {d.usuario}</dd>
-            <dt className="col-sm-4">Motivo</dt><dd className="col-sm-8">{d.motivo}</dd>
-          </dl>
+      <div className="row g-3">
+        <div className="col-lg-7">
+          <Seccion titulo="Datos de la devolución" icono="bi-info-circle">
+            <Ficha filas={[
+              ['Pedido', <Link to={`/pedidos/${d.pedido_id}`}>{d.pedido_codigo}</Link>],
+              ['Cliente', d.nombre_cliente],
+              ['Sucursal', d.sucursal ?? '—'],
+              ['Fecha', `${fechaHora(d.fecha)} · ${d.usuario}`],
+              ['Motivo', d.motivo],
+            ]} />
+          </Seccion>
         </div>
-        <div className="col-md-5 text-md-end">
-          <div className="fs-4">Total devuelto: <strong>{money(d.total_reembolso)}</strong></div>
-          {Number(d.redondeo) !== 0 && (
-            <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(d.redondeo), money)}</strong> · Dinero devuelto <strong>{money(Number(d.total_reembolso) + Number(d.redondeo))}</strong></div>
-          )}
+        <div className="col-lg-5">
+          <Seccion titulo="Total devuelto" icono="bi-receipt">
+            <div className="fc-total-bloque">
+              <div className="fc-total-importe">{money(d.total_reembolso)}</div>
+              {Number(d.redondeo) !== 0 && (
+                <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(d.redondeo), money)}</strong>
+                  <br />Dinero devuelto <strong>{money(Number(d.total_reembolso) + Number(d.redondeo))}</strong></div>
+              )}
+            </div>
+          </Seccion>
         </div>
       </div>
 
-      <table className="table align-middle">
-        <thead><tr><th>SKU</th><th>Producto</th><th className="text-end">Cant.</th><th>Stock</th><th className="text-end">Reembolso</th></tr></thead>
-        <tbody>
-          {d.lineas.map((l) => (
-            <tr key={l.id}>
-              <td>{l.sku}</td><td>{l.nombre_producto}</td><td className="text-end">{l.cantidad}</td>
-              <td>{l.reingresa_stock ? <span className="badge text-bg-success">Reingresado</span> : <span className="badge text-bg-secondary">No reingresado</span>}</td>
-              <td className="text-end">{money(l.monto_reembolso)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Seccion titulo="Productos devueltos" icono="bi-box-seam" plano>
+        <div className="table-responsive">
+          <table className="table align-middle">
+            <thead><tr><th>SKU</th><th>Producto</th><th className="text-end">Cant.</th><th>Stock</th><th className="text-end">Reembolso</th></tr></thead>
+            <tbody>
+              {d.lineas.map((l) => (
+                <tr key={l.id}>
+                  <td className="text-nowrap">{l.sku}</td><td>{l.nombre_producto}</td><td className="text-end">{l.cantidad}</td>
+                  <td>{l.reingresa_stock ? <span className="badge text-bg-success">Reingresado</span> : <span className="badge text-bg-secondary">No reingresado</span>}</td>
+                  <td className="text-end">{money(l.monto_reembolso)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Seccion>
 
-      <h3 className="h5">Dinero devuelto</h3>
-      <table className="table table-sm" style={{ maxWidth: 520 }}>
-        <thead><tr><th>Medio</th><th>Referencia</th><th className="text-end">Monto</th></tr></thead>
-        <tbody>
-          {d.pagos.map((x) => <tr key={x.id}><td>{x.medio_pago}</td><td>{x.referencia ?? '—'}</td><td className="text-end">{money(x.monto)}</td></tr>)}
-        </tbody>
-      </table>
+      <Seccion titulo="Dinero devuelto" icono="bi-cash-coin" plano>
+        <div className="table-responsive">
+          <table className="table table-sm">
+            <thead><tr><th>Medio</th><th>Referencia</th><th className="text-end">Monto</th></tr></thead>
+            <tbody>
+              {d.pagos.map((x) => <tr key={x.id}><td>{x.medio_pago}</td><td>{x.referencia ?? '—'}</td><td className="text-end">{money(x.monto)}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </Seccion>
+
+      <Seccion titulo="Enviar comprobante por correo" icono="bi-envelope">
+        <EnviarCorreo ruta={`/devoluciones/${id}/enviar`} />
+      </Seccion>
     </>
   );
 }

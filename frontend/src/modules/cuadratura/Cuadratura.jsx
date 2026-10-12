@@ -6,7 +6,8 @@ import { descargarArchivo } from '../../archivos.js';
 import { fechaHora, money } from '../../format.js';
 import { textoAjuste } from '../../redondeo.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import Kpi from '../../components/Kpi.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
 const ESTADO_CLASE = { Abierto: 'info', 'Cerrado sin revisar': 'warning', 'Revisado conforme': 'success', 'Revisado con observaciones': 'secondary' };
@@ -14,20 +15,6 @@ const ESTADOS = [['', 'Todos los turnos'], ['abierto', 'Abiertos'], ['cerrado', 
 
 const Dif = ({ v }) => (v == null ? <span className="text-muted">—</span>
   : <span className={v === 0 ? 'text-success' : 'text-danger fw-semibold'}>{v === 0 ? 'Cuadra' : `${v > 0 ? '+' : '-'}${money(Math.abs(v))}`}</span>);
-
-function Indicador({ titulo, valor, clase = '', onClick, sub }) {
-  return (
-    <div className="col-6 col-lg-2">
-      <div className={`card h-100 ${onClick ? 'border-warning' : ''}`} role={onClick ? 'button' : undefined} onClick={onClick}>
-        <div className="card-body py-2">
-          <div className="small text-muted">{titulo}</div>
-          <div className={`fs-5 fw-bold ${clase}`}>{valor}</div>
-          {sub && <div className="small text-muted">{sub}</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Cuadratura() {
   const { can } = useAuth();
@@ -51,88 +38,104 @@ export default function Cuadratura() {
   const s = resumen.data;
   const cambiar = (fn) => (v) => { setPage(1); fn(v); };
 
+  const exportar = () => descargarArchivo(`/cuadratura/exportar${qs({ ...filtros, estado })}`).catch(setActionError);
+  const dn = Number(s?.diferencia_neta ?? 0);
+
   return (
     <>
-      <PageHeader title="Cuadratura de caja" />
+      <PageHeader title="Cuadratura de caja">
+        <button type="button" className="btn btn-success" disabled={Boolean(rangoInvalido)} onClick={exportar}>
+          <i className="bi bi-file-earmark-excel me-1" />Exportar a Excel
+        </button>
+      </PageHeader>
       {!supervisor && <p className="text-muted">Aquí ve el historial de sus turnos. El efectivo esperado de un turno abierto no se muestra: se informa al cerrarlo.</p>}
 
-      <div className="row g-2 mb-2">
-        <div className="col-md-3">
-          <select className="form-select" value={estado} onChange={(e) => cambiar(setEstado)(e.target.value)}>
-            {ESTADOS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
-          </select>
-        </div>
-        <div className="col-md-3">
-          <select className="form-select" value={sucursal} onChange={(e) => cambiar(setSucursal)(e.target.value)}>
-            <option value="">Todas las sucursales</option>
-            {catalogos.data?.sucursales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-          </select>
-        </div>
-        {supervisor && (
-          <div className="col-md-3">
-            <select className="form-select" value={cajero} onChange={(e) => cambiar(setCajero)(e.target.value)}>
-              <option value="">Todos los cajeros</option>
-              {cajeros.data?.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+      <Filtros>
+        <div className="row g-2">
+          <div className="col-md-4">
+            <select className="form-select" aria-label="Estado del turno" value={estado} onChange={(e) => cambiar(setEstado)(e.target.value)}>
+              {ESTADOS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
             </select>
           </div>
-        )}
-      </div>
-      <div className="mb-3 d-flex align-items-center gap-2">
-        <span className="small text-muted">Apertura del turno:</span>
-        <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
-      </div>
+          <div className="col-md-4">
+            <select className="form-select" aria-label="Sucursal" value={sucursal} onChange={(e) => cambiar(setSucursal)(e.target.value)}>
+              <option value="">Todas las sucursales</option>
+              {catalogos.data?.sucursales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+            </select>
+          </div>
+          {supervisor && (
+            <div className="col-md-4">
+              <select className="form-select" aria-label="Cajero" value={cajero} onChange={(e) => cambiar(setCajero)(e.target.value)}>
+                <option value="">Todos los cajeros</option>
+                {cajeros.data?.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="small text-muted">Apertura del turno:</span>
+          <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
+        </div>
+      </Filtros>
       {rangoInvalido && <div className="alert alert-warning py-2">La fecha "desde" no puede ser posterior a "hasta".</div>}
       <ErrorAlert error={resumen.error || lista.error || actionError} onClose={actionError ? () => setActionError(null) : undefined} />
 
       {s && (
         <>
-          <div className="row g-2 mb-2">
-            <Indicador titulo="Turnos" valor={s.turnos} sub={`${s.abiertos} abierto(s)`} />
-            <Indicador titulo="Ventas netas" valor={money(s.ventas_netas)} sub={`${s.ventas} ventas · ${s.devoluciones} devol.`} />
-            <Indicador titulo="Diferencia neta" valor={Number(s.diferencia_neta) === 0 ? 'Cuadra' : `${Number(s.diferencia_neta) < 0 ? '-' : '+'}${money(Math.abs(Number(s.diferencia_neta)))}`} clase={Number(s.diferencia_neta) === 0 ? 'text-success' : 'text-danger'} sub={`${s.con_diferencia} turno(s) con diferencia`} />
-            <Indicador titulo="Faltantes" valor={money(s.faltantes)} clase={Number(s.faltantes) > 0 ? 'text-danger' : ''} />
-            <Indicador titulo="Sobrantes" valor={money(s.sobrantes)} clase={Number(s.sobrantes) > 0 ? 'text-warning' : ''} />
-            <Indicador titulo="Sin revisar" valor={s.sin_revisar} onClick={s.sin_revisar ? () => cambiar(setEstado)('sin_revisar') : undefined} sub={s.sin_revisar ? 'ver pendientes' : 'al día'} />
+          <div className="row g-2 mb-3">
+            <Kpi col="col-6 col-lg-2" titulo="Turnos" valor={s.turnos} sub={`${s.abiertos} abierto(s)`} />
+            <Kpi col="col-6 col-lg-2" titulo="Ventas netas" valor={money(s.ventas_netas)} sub={`${s.ventas} ventas · ${s.devoluciones} devol.`} />
+            <Kpi col="col-6 col-lg-2" titulo="Diferencia neta" valor={dn === 0 ? 'Cuadra' : `${dn < 0 ? '-' : '+'}${money(Math.abs(dn))}`}
+              clase={dn === 0 ? 'text-success' : 'text-danger'} sub={`${s.con_diferencia} turno(s) con diferencia`} />
+            <Kpi col="col-6 col-lg-2" titulo="Faltantes" valor={money(s.faltantes)} clase={Number(s.faltantes) > 0 ? 'text-danger' : ''} />
+            <Kpi col="col-6 col-lg-2" titulo="Sobrantes" valor={money(s.sobrantes)} clase={Number(s.sobrantes) > 0 ? 'text-warning' : ''} />
+            <Kpi col="col-6 col-lg-2" titulo="Sin revisar" valor={s.sin_revisar} onClick={s.sin_revisar ? () => cambiar(setEstado)('sin_revisar') : undefined}
+              sub={s.sin_revisar ? 'ver pendientes' : 'al día'} />
           </div>
-          <button className="btn btn-link btn-sm p-0 mb-2" onClick={() => setDetalle((d) => !d)}>
-            {detalle ? 'Ocultar' : 'Ver'} desglose por medio de pago y por cajero
-          </button>
-          {detalle && (
-            <div className="row g-3 mb-3">
-              <div className="col-md-6">
-                <table className="table table-sm">
-                  <thead><tr><th>Medio de pago</th><th className="text-end">Ventas</th><th className="text-end">Devoluciones</th><th className="text-end">Neto</th></tr></thead>
-                  <tbody>
-                    {s.por_medio.length === 0 && <tr><td colSpan="4" className="text-muted text-center">Sin movimientos</td></tr>}
-                    {s.por_medio.map((m) => (
-                      <tr key={m.medio_pago}><td>{m.medio_pago}</td><td className="text-end">{money(m.ventas)}</td>
-                        <td className="text-end">{Number(m.devoluciones) ? `-${money(m.devoluciones)}` : '—'}</td><td className="text-end">{money(Number(m.ventas) - Number(m.devoluciones))}</td></tr>
-                    ))}
-                    {Number(s.redondeo) !== 0 && (
-                      <tr className="text-muted"><td colSpan="3">Ajuste por redondeo del efectivo (Ley 20.956)</td><td className="text-end">{textoAjuste(Number(s.redondeo), money)}</td></tr>
-                    )}
-                  </tbody>
-                </table>
+
+          <Seccion titulo="Desglose del período" icono="bi-bar-chart-line" plano={detalle}
+            acciones={<button className="btn btn-sm btn-outline-secondary" onClick={() => setDetalle((d) => !d)}>{detalle ? 'Ocultar' : 'Ver'} detalle</button>}>
+            {!detalle ? <span className="text-muted small">Cobrado y devuelto por medio de pago, y resultado por cajero.</span> : (
+              <div className="row g-0">
+                <div className="col-lg-6 border-end">
+                  <div className="table-responsive">
+                    <table className="table table-sm">
+                      <thead><tr><th>Medio de pago</th><th className="text-end">Ventas</th><th className="text-end">Devoluciones</th><th className="text-end">Neto</th></tr></thead>
+                      <tbody>
+                        {s.por_medio.length === 0 && <tr><td colSpan="4" className="text-muted text-center py-3">Sin movimientos</td></tr>}
+                        {s.por_medio.map((m) => (
+                          <tr key={m.medio_pago}><td>{m.medio_pago}</td><td className="text-end">{money(m.ventas)}</td>
+                            <td className="text-end">{Number(m.devoluciones) ? `-${money(m.devoluciones)}` : '—'}</td><td className="text-end">{money(Number(m.ventas) - Number(m.devoluciones))}</td></tr>
+                        ))}
+                        {Number(s.redondeo) !== 0 && (
+                          <tr className="text-muted"><td colSpan="3">Ajuste por redondeo del efectivo (Ley 20.956)</td><td className="text-end">{textoAjuste(Number(s.redondeo), money)}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="col-lg-6">
+                  <div className="table-responsive">
+                    <table className="table table-sm">
+                      <thead><tr><th>Cajero</th><th className="text-end">Turnos</th><th className="text-end">Ventas</th><th className="text-end">Faltantes</th><th className="text-end">Sobrantes</th></tr></thead>
+                      <tbody>
+                        {s.por_cajero.map((c) => (
+                          <tr key={c.cajero}><td>{c.cajero}</td><td className="text-end">{c.turnos}</td><td className="text-end">{money(c.total_ventas)}</td>
+                            <td className={`text-end ${Number(c.faltantes) ? 'text-danger' : ''}`}>{Number(c.faltantes) ? money(c.faltantes) : '—'}</td>
+                            <td className="text-end">{Number(c.sobrantes) ? money(c.sobrantes) : '—'}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-              <div className="col-md-6">
-                <table className="table table-sm">
-                  <thead><tr><th>Cajero</th><th className="text-end">Turnos</th><th className="text-end">Ventas</th><th className="text-end">Faltantes</th><th className="text-end">Sobrantes</th></tr></thead>
-                  <tbody>
-                    {s.por_cajero.map((c) => (
-                      <tr key={c.cajero}><td>{c.cajero}</td><td className="text-end">{c.turnos}</td><td className="text-end">{money(c.total_ventas)}</td>
-                        <td className={`text-end ${Number(c.faltantes) ? 'text-danger' : ''}`}>{Number(c.faltantes) ? money(c.faltantes) : '—'}</td>
-                        <td className="text-end">{Number(c.sobrantes) ? money(c.sobrantes) : '—'}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+            )}
+          </Seccion>
         </>
       )}
 
-      {lista.loading && !lista.data ? <Spinner /> : (
-        <>
+      <Seccion titulo="Turnos" icono="bi-clock-history" plano>
+        {lista.loading && !lista.data ? <div className="p-3"><Spinner /></div> : (
           <div className="table-responsive">
             <table className="table table-hover align-middle">
               <thead>
@@ -143,7 +146,7 @@ export default function Cuadratura() {
                 {(lista.data?.data.length ?? 0) === 0 && <tr><td colSpan="10" className="text-center text-muted py-4">Sin turnos con esos filtros</td></tr>}
                 {lista.data?.data.map((t) => (
                   <tr key={t.id}>
-                    <td className="text-nowrap"><Link to={`/cuadratura/${t.id}`} className="text-decoration-none">{fechaHora(t.fecha_apertura)}</Link></td>
+                    <td className="text-nowrap"><Link to={`/cuadratura/${t.id}`} className="text-decoration-none fw-semibold">{fechaHora(t.fecha_apertura)}</Link></td>
                     <td>{t.sucursal} · Caja {t.caja_numero}</td>
                     <td>{t.cajero}</td>
                     <td><span className={`badge text-bg-${ESTADO_CLASE[t.estado]}`}>{t.estado}</span></td>
@@ -155,8 +158,12 @@ export default function Cuadratura() {
                     <td className="text-nowrap text-end">
                       <Link to={`/cuadratura/${t.id}`} className="btn btn-sm btn-outline-primary me-1" title="Ver"><i className="bi bi-eye" /></Link>
                       {(t.fecha_cierre || supervisor) && (
-                        <button className="btn btn-sm btn-outline-secondary" title={t.fecha_cierre ? 'Descargar Cierre Z' : 'Descargar reporte X'}
-                          onClick={() => descargarArchivo(`/cuadratura/turnos/${t.id}/pdf`).catch(setActionError)}><i className="bi bi-file-earmark-pdf" /></button>
+                        <>
+                          <button className="btn btn-sm btn-outline-secondary me-1" title={t.fecha_cierre ? 'Descargar Cierre Z (PDF)' : 'Descargar reporte X (PDF)'}
+                            onClick={() => descargarArchivo(`/cuadratura/turnos/${t.id}/pdf`).catch(setActionError)}><i className="bi bi-file-earmark-pdf" /></button>
+                          <button className="btn btn-sm btn-outline-success" title="Descargar la ficha del turno en Excel"
+                            onClick={() => descargarArchivo(`/cuadratura/turnos/${t.id}/excel`).catch(setActionError)}><i className="bi bi-file-earmark-excel" /></button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -164,9 +171,9 @@ export default function Cuadratura() {
               </tbody>
             </table>
           </div>
-          <Pager page={page} limit={LIMIT} total={lista.data?.total ?? 0} onPage={setPage} />
-        </>
-      )}
+        )}
+      </Seccion>
+      <Pager page={page} limit={LIMIT} total={lista.data?.total ?? 0} onPage={setPage} />
     </>
   );
 }

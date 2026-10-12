@@ -3,7 +3,8 @@ import { pool, withTx } from '../../core/db.js';
 import { condicionRango, rangoFechas } from '../../core/fechas.js';
 import { likeParam, listResponse, paging, uuid } from '../../core/sql.js';
 import { codigoPedido } from '../pedidos/servicio.js';
-import { comprobanteDevolucion } from './comprobante.js';
+import { correoSchema } from '../../core/correo.js';
+import { comprobanteDevolucion, enviarComprobanteDevolucion } from './comprobante.js';
 import { cotizacionSchema, devolucionSchema } from './esquemas.js';
 import { codigoDevolucion, cotizarDevolucion, crearDevolucion, detalleDevolucion, pedidoDevolvible } from './servicio.js';
 
@@ -66,6 +67,11 @@ r.post('/', async (req, res) => {
 });
 
 r.get('/:id', async (req, res) => res.json(await detalleDevolucion(pool, uuid.parse(req.params.id))));
+
+r.post('/:id/enviar', async (req, res) => {
+  const { correo } = correoSchema.parse(req.body);
+  res.json(await enviarComprobanteDevolucion(pool, uuid.parse(req.params.id), correo));
+});
 
 r.get('/:id/pdf', async (req, res) => res.json(await comprobanteDevolucion(pool, uuid.parse(req.params.id))));
 

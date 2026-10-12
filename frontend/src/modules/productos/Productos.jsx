@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { money, percent } from '../../format.js';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
 
@@ -34,22 +34,24 @@ export default function Productos() {
         <Link to="/productos/nuevo" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nuevo producto</Link>
       </PageHeader>
 
-      <form
-        className="row g-2 mb-3"
-        onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}
-      >
-        <div className="col-md-6">
-          <input className="form-control" placeholder="Buscar por SKU o nombre" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <div className="col-md-3">
-          <select className="form-select" value={activo} onChange={(e) => { setPage(1); setActivo(e.target.value); }}>
-            <option value="">Todos</option>
-            <option value="true">Activos</option>
-            <option value="false">Dados de baja</option>
-          </select>
-        </div>
-        <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
-      </form>
+      <Filtros>
+        <form
+          className="row g-2"
+          onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}
+        >
+          <div className="col-md-6">
+            <input className="form-control" placeholder="Buscar por SKU o nombre" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div className="col-md-3">
+            <select className="form-select" value={activo} onChange={(e) => { setPage(1); setActivo(e.target.value); }}>
+              <option value="">Todos</option>
+              <option value="true">Activos</option>
+              <option value="false">Dados de baja</option>
+            </select>
+          </div>
+          <div className="col-md-3"><button className="btn btn-outline-secondary w-100">Buscar</button></div>
+        </form>
+      </Filtros>
 
       <ErrorAlert error={error || actionError} onClose={() => setActionError(null)} />
       {loading ? <Spinner /> : (
@@ -67,7 +69,7 @@ export default function Productos() {
                 {data?.data.length === 0 && <tr><td colSpan="10" className="text-center text-muted py-4">Sin resultados</td></tr>}
                 {data?.data.map((p) => (
                   <tr key={p.id} className={p.activo ? '' : 'text-muted'}>
-                    <td>{p.sku}</td>
+                    <td className="text-nowrap">{p.sku}</td>
                     <td>{p.nombre}</td>
                     <td>{p.categoria}</td>
                     <td>{p.condicion_venta}</td>

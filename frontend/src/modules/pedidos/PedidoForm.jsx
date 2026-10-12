@@ -98,7 +98,7 @@ export default function PedidoForm() {
         Pedido a distancia (canal Online). Queda en "Pago pendiente"; si no se paga en 20 minutos expira y devuelve el stock reservado.
       </p>
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar}>
+      <form onSubmit={guardar} className="fc-formulario">
         <div className="row">
           <div className="col-md-4">
             <Field label="Cliente">

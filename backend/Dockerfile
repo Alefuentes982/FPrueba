@@ -1,4 +1,4 @@
-# API de FarmaClick (Node.js + Express). Imagen multiarquitectura: en Oracle Cloud se usa linux/arm64 (VM Ampere A1).
+# API de FarmaClick (Node.js + Express). La CI la construye para linux/amd64 (VM x86_64 de Oracle Cloud); ver ci.yml.
 FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /app

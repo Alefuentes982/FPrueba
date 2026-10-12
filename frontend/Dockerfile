@@ -1,4 +1,4 @@
-# SPA de FarmaClick servida por Nginx, que además reenvía /api a la API. Imagen multiarquitectura (arm64 en Oracle).
+# SPA de FarmaClick servida por Nginx, que además reenvía /api a la API. La CI la construye para linux/amd64 (ver ci.yml).
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

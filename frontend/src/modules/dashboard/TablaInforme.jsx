@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { api, qs } from '../../api.js';
 import { descargarArchivo } from '../../archivos.js';
 import { money, soloFecha } from '../../format.js';
-import { ErrorAlert, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 const numero = new Intl.NumberFormat('es-CL');
 const celda = (tipo, v) => (v == null || v === '' ? '—' : tipo === 'clp' ? money(v) : tipo === 'entero' ? numero.format(v) : tipo === 'fecha' ? soloFecha(v) : v);
+const alinea = (c) => (c.tipo === 'texto' || c.tipo === 'fecha' ? '' : 'text-end');
 
-// Un informe del dashboard: lo pide al backend, lo muestra como tabla con su fila de totales y ofrece CSV y PDF.
-// `plegable` deja la tabla oculta bajo `antes` hasta que se pide. `params` son los filtros (desde, hasta, sucursal_id, dias, limite); el CSV y el PDF traen todas las filas, sin el límite; `antes(informe)` permite poner un gráfico encima.
-export default function TablaInforme({ id, titulo, params, antes, vacio = 'Sin datos para los filtros elegidos.', plegable = false }) {
+// Un informe del dashboard dentro de su sección: lo pide al backend, lo muestra como tabla con su fila de totales y ofrece
+// Excel, CSV y PDF en la cabecera. `params` son los filtros (desde, hasta, sucursal_id, dias, limite); la exportación trae
+// todas las filas, sin el límite. `antes(informe)` permite poner un gráfico sobre la tabla; `plegable` deja la tabla
+// oculta bajo ese gráfico hasta que se pide.
+export default function TablaInforme({ id, titulo, icono = 'bi-table', params, antes, vacio = 'Sin datos para los filtros elegidos.', plegable = false }) {
   const consulta = qs(params);
   const { data, error, loading } = useAsync(() => api.get(`/dashboard/informes/${id}${consulta}`), [id, consulta]);
   const [errorArchivo, setErrorArchivo] = useState(null);
@@ -28,56 +31,61 @@ export default function TablaInforme({ id, titulo, params, antes, vacio = 'Sin d
     }
   };
 
+  const sinDatos = !data?.filas.length;
+  const boton = (formato, etiqueta, icon, clase) => (
+    <button key={formato} type="button" className={`btn btn-sm ${clase}`} disabled={sinDatos || bajando} onClick={() => exportar(formato)} title={`Descargar en ${etiqueta}`}>
+      <i className={`bi ${icon} me-1`} />{bajando === formato ? 'Generando…' : etiqueta}
+    </button>
+  );
+  const acciones = (
+    <>
+      {boton('xlsx', 'Excel', 'bi-file-earmark-excel', 'btn-outline-success')}
+      {boton('csv', 'CSV', 'bi-filetype-csv', 'btn-outline-secondary')}
+      {boton('pdf', 'PDF', 'bi-file-earmark-pdf', 'btn-outline-secondary')}
+    </>
+  );
+
+  const tabla = data && (
+    <div className="table-responsive">
+      <table className="table table-sm table-hover align-middle">
+        <thead>
+          <tr>{data.columnas.map((c) => <th key={c.key} className={alinea(c)}>{c.header}</th>)}</tr>
+        </thead>
+        <tbody>
+          {data.filas.length === 0 && <tr><td colSpan={data.columnas.length} className="text-center text-muted py-3">{vacio}</td></tr>}
+          {data.filas.map((f, i) => (
+            <tr key={i}>
+              {data.columnas.map((c) => <td key={c.key} className={alinea(c)}>{celda(c.tipo, f[c.key])}</td>)}
+            </tr>
+          ))}
+        </tbody>
+        {data.filas.length > 1 && Object.keys(data.totales).length > 0 && (
+          <tfoot>
+            <tr className="fw-semibold">
+              {data.columnas.map((c, i) => (
+                <td key={c.key} className={alinea(c)}>{i === 0 ? 'Total' : c.key in data.totales ? celda(c.tipo, data.totales[c.key]) : ''}</td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+
   return (
-    <section className="mb-4">
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-        <h3 className="h5 mb-0">{titulo ?? data?.titulo}</h3>
-        <div className="btn-group btn-group-sm">
-          <button className="btn btn-outline-secondary" disabled={!data?.filas.length || bajando} onClick={() => exportar('csv')} title="Descargar en CSV (Excel)">
-            <i className="bi bi-filetype-csv me-1" />{bajando === 'csv' ? 'Generando…' : 'CSV'}
-          </button>
-          <button className="btn btn-outline-secondary" disabled={!data?.filas.length || bajando} onClick={() => exportar('pdf')} title="Descargar en PDF">
-            <i className="bi bi-file-earmark-pdf me-1" />{bajando === 'pdf' ? 'Generando…' : 'PDF'}
-          </button>
-        </div>
-      </div>
+    <Seccion titulo={titulo ?? data?.titulo} icono={icono} acciones={acciones} plano={!antes}>
       <ErrorAlert error={error || errorArchivo} onClose={errorArchivo ? () => setErrorArchivo(null) : undefined} />
-      {loading && !data ? <Spinner /> : data && (
+      {loading && !data ? <Spinner /> : data && (antes ? (
         <>
-          {antes?.(data)}
+          {antes(data)}
           {plegable && (
-            <button className="btn btn-link btn-sm p-0 mb-2" onClick={() => setAbierta((a) => !a)}>{abierta ? 'Ocultar' : 'Ver'} el detalle en tabla</button>
+            <button type="button" className="btn btn-link btn-sm px-0 mt-2" onClick={() => setAbierta((a) => !a)}>
+              <i className={`bi ${abierta ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`} />{abierta ? 'Ocultar' : 'Ver'} el detalle en tabla
+            </button>
           )}
-          {abierta && <div className="table-responsive">
-            <table className="table table-sm table-hover align-middle mb-1">
-              <thead>
-                <tr>{data.columnas.map((c) => <th key={c.key} className={c.tipo === 'texto' || c.tipo === 'fecha' ? '' : 'text-end'}>{c.header}</th>)}</tr>
-              </thead>
-              <tbody>
-                {data.filas.length === 0 && <tr><td colSpan={data.columnas.length} className="text-center text-muted py-3">{vacio}</td></tr>}
-                {data.filas.map((f, i) => (
-                  <tr key={i}>
-                    {data.columnas.map((c) => (
-                      <td key={c.key} className={c.tipo === 'texto' || c.tipo === 'fecha' ? '' : 'text-end'}>{celda(c.tipo, f[c.key])}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-              {data.filas.length > 1 && Object.keys(data.totales).length > 0 && (
-                <tfoot>
-                  <tr className="fw-semibold table-light">
-                    {data.columnas.map((c, i) => (
-                      <td key={c.key} className={c.tipo === 'texto' || c.tipo === 'fecha' ? '' : 'text-end'}>
-                        {i === 0 ? 'Total' : c.key in data.totales ? celda(c.tipo, data.totales[c.key]) : ''}
-                      </td>
-                    ))}
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>}
+          {abierta && <div className="mt-2 border rounded overflow-hidden">{tabla}</div>}
         </>
-      )}
-    </section>
+      ) : tabla)}
+    </Seccion>
   );
 }

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import { fechaCorta, money, soloFecha } from '../../format.js';
-import { descargarArchivo, verArchivo } from '../../archivos.js';
+import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { estadoOcClase } from './estados.js';
-import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Ficha, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 export default function OrdenCompraDetalle() {
   const { id } = useParams();
@@ -73,14 +73,7 @@ export default function OrdenCompraDetalle() {
             <i className="bi bi-send me-1" />Emitir
           </button>
         )}
-        <button className="btn btn-outline-secondary" disabled={busy}
-          onClick={() => verArchivo(`/ordenes-compra/${id}/pdf`).catch(setActionError)}>
-          <i className="bi bi-eye me-1" />Ver PDF
-        </button>
-        <button className="btn btn-outline-secondary" disabled={busy}
-          onClick={() => descargarArchivo(`/ordenes-compra/${id}/pdf`, `${o.codigo}.pdf`).catch(setActionError)}>
-          <i className="bi bi-file-earmark-pdf me-1" />Descargar PDF
-        </button>
+        <BotonesDocumento path={`/ordenes-compra/${id}/pdf`} nombre={`${o.codigo}.pdf`} onError={setActionError} etiquetaVer="Ver PDF" />
         {cancelable && (
           <button className="btn btn-outline-danger" disabled={busy}
             onClick={() => window.confirm('¿Cancelar esta orden de compra?')
@@ -105,23 +98,30 @@ export default function OrdenCompraDetalle() {
         </div>
       )}
 
-      <div className="row mb-3">
-        <div className="col-md-6">
-          <dl className="row mb-0">
-            <dt className="col-sm-4">Estado</dt><dd className="col-sm-8"><span className={`badge text-bg-${estadoOcClase[o.estado] ?? 'light'}`}>{o.estado}</span></dd>
-            <dt className="col-sm-4">Proveedor</dt><dd className="col-sm-8">{o.proveedor} <span className="text-muted">({o.proveedor_rut})</span></dd>
-            <dt className="col-sm-4">Sucursal</dt><dd className="col-sm-8">{o.sucursal}</dd>
-            <dt className="col-sm-4">Creada</dt><dd className="col-sm-8">{fechaCorta(o.fecha)} por {o.usuario}</dd>
-            <dt className="col-sm-4">Entrega esperada</dt><dd className="col-sm-8">{soloFecha(o.fecha_esperada)}</dd>
-          </dl>
+      <div className="row g-3">
+        <div className="col-lg-7">
+          <Seccion titulo="Datos de la orden" icono="bi-info-circle">
+            <Ficha filas={[
+              ['Estado', <span className={`badge text-bg-${estadoOcClase[o.estado] ?? 'light'}`}>{o.estado}</span>],
+              ['Proveedor', <>{o.proveedor} <span className="text-muted">({o.proveedor_rut})</span></>],
+              ['Sucursal', o.sucursal],
+              ['Creada', `${fechaCorta(o.fecha)} por ${o.usuario}`],
+              ['Entrega esperada', soloFecha(o.fecha_esperada)],
+            ]} />
+          </Seccion>
         </div>
-        <div className="col-md-6 text-md-end">
-          <div>Neto: <strong>{money(o.subtotal_neto)}</strong></div>
-          <div>IVA: <strong>{money(o.iva)}</strong></div>
-          <div className="fs-5">Total: <strong>{money(o.total)}</strong></div>
+        <div className="col-lg-5">
+          <Seccion titulo="Totales" icono="bi-receipt">
+            <div className="fc-total-bloque">
+              <div>Neto: <strong>{money(o.subtotal_neto)}</strong></div>
+              <div>IVA: <strong>{money(o.iva)}</strong></div>
+              <div className="fc-total-importe">{money(o.total)}</div>
+            </div>
+          </Seccion>
         </div>
       </div>
 
+      <Seccion titulo="Productos de la orden" icono="bi-box-seam" plano>
       <div className="table-responsive">
         <table className="table align-middle">
           <thead>
@@ -136,7 +136,7 @@ export default function OrdenCompraDetalle() {
               const pendiente = i.cantidad_solicitada - i.cantidad_recibida;
               return (
                 <tr key={i.id}>
-                  <td>{i.sku}</td><td>{i.producto}</td>
+                  <td className="text-nowrap">{i.sku}</td><td>{i.producto}</td>
                   <td className="text-end">{i.cantidad_solicitada}</td>
                   <td className="text-end">{i.cantidad_recibida}</td>
                   <td className="text-end">{money(i.costo_unitario)}</td>
@@ -154,6 +154,7 @@ export default function OrdenCompraDetalle() {
           </tbody>
         </table>
       </div>
+      </Seccion>
 
       {recibiendo && (
         <div className="d-flex gap-2">

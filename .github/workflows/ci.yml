@@ -1,4 +1,4 @@
-# Integración continua: pruebas, validación del esquema SQL y construcción de las imágenes.
+# Integración continua: control de secretos, pruebas, validación del esquema SQL y construcción de las imágenes.
 # Docker para linux/amd64 (VM Micro x86_64 de Oracle Cloud) y publicación en GitHub Container Registry.
 name: CI
 on:
@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  # Bloquea el pipeline si se versionó algún secreto: archivos .env reales, la carpeta _privado/ o credenciales.
+  seguridad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No hay secretos versionados
+        run: |
+          prohibidos=$(git ls-files | grep -E '(^|/)_privado/|(^|/)\.env$|(^|/)\.env\.(local|dev|prod|production|development)$|credencial' || true)
+          if [ -n "$prohibidos" ]; then echo "::error::Archivos que no deben estar en el repositorio:"; echo "$prohibidos"; exit 1; fi
+
   backend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }
@@ -42,7 +52,7 @@ jobs:
       - run: npm run build
 
   imagenes:
-    needs: [backend, esquema, frontend]
+    needs: [seguridad, backend, esquema, frontend]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }

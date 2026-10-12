@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { fechaHora } from '../../format.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 import Pestanas from './Pestanas.jsx';
 
 const LIMIT = 20;
@@ -36,31 +36,33 @@ export default function Kardex() {
           <button type="button" className="btn-close" aria-label="Cerrar" onClick={() => setAviso(null)} />
         </div>
       )}
-      <form className="row g-2 mb-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-3"><input className="form-control" placeholder="SKU, producto o N° de lote" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-3">
-          <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
-            <option value="">Todas las sucursales</option>
-            {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-3"><input className="form-control" placeholder="SKU, producto o N° de lote" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-3">
+            <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
+              <option value="">Todas las sucursales</option>
+              {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+          </div>
+          <div className="col-md-2">
+            <select className="form-select" value={tipo} onChange={(e) => { setPage(1); setTipo(e.target.value); }}>
+              <option value="">Entradas y salidas</option><option>Entrada</option><option>Salida</option>
+            </select>
+          </div>
+          <div className="col-md-3">
+            <select className="form-select" value={motivo} onChange={(e) => { setPage(1); setMotivo(e.target.value); }}>
+              <option value="">Todos los motivos</option>
+              {catalogos.data?.motivos_movimiento.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+            </select>
+          </div>
+          <div className="col-md-1"><button className="btn btn-outline-secondary w-100"><i className="bi bi-search" /></button></div>
+        </form>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="small text-muted">Fecha:</span>
+          <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
         </div>
-        <div className="col-md-2">
-          <select className="form-select" value={tipo} onChange={(e) => { setPage(1); setTipo(e.target.value); }}>
-            <option value="">Entradas y salidas</option><option>Entrada</option><option>Salida</option>
-          </select>
-        </div>
-        <div className="col-md-3">
-          <select className="form-select" value={motivo} onChange={(e) => { setPage(1); setMotivo(e.target.value); }}>
-            <option value="">Todos los motivos</option>
-            {catalogos.data?.motivos_movimiento.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-          </select>
-        </div>
-        <div className="col-md-1"><button className="btn btn-outline-secondary w-100"><i className="bi bi-search" /></button></div>
-      </form>
-      <div className="mb-3 d-flex align-items-center gap-2">
-        <span className="small text-muted">Fecha:</span>
-        <FiltroFechas desde={fechas.desde} hasta={fechas.hasta} onChange={(f) => { setPage(1); setFechas(f); }} />
-      </div>
+      </Filtros>
       {rangoInvalido && <div className="alert alert-warning py-2">La fecha "desde" no puede ser posterior a "hasta".</div>}
 
       <ErrorAlert error={error} />

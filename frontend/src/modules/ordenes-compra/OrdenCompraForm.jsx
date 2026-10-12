@@ -102,7 +102,7 @@ export default function OrdenCompraForm() {
     <>
       <PageHeader title={editando ? `Editar borrador ${orden.data.codigo}` : 'Nueva orden de compra'} />
       <ErrorAlert error={error} onClose={() => setError(null)} />
-      <form onSubmit={guardar}>
+      <form onSubmit={guardar} className="fc-formulario">
         <div className="row">
           <div className="col-md-4">
             <Field label="Proveedor">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, qs } from '../../api.js';
 import { soloFecha } from '../../format.js';
-import { ErrorAlert, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
+import { ErrorAlert, Filtros, PageHeader, Pager, Spinner, useAsync } from '../../components/ui.jsx';
 import Pestanas from './Pestanas.jsx';
 
 const LIMIT = 15;
@@ -55,28 +55,30 @@ export default function Lotes() {
         </button>
       </PageHeader>
       <Pestanas />
-      <form className="row g-2 mb-3" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
-        <div className="col-md-4"><input className="form-control" placeholder="SKU, producto o N° de lote" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <div className="col-md-3">
-          <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
-            <option value="">Todas las sucursales</option>
-            {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </div>
-        <div className="col-md-2">
-          <select className="form-select" value={estado} onChange={(e) => { setPage(1); setEstado(e.target.value); }}>
-            <option value="">Todos</option>
-            {ESTADOS.map(([k, n]) => <option key={k} value={k}>{n}{k === 'por_vencer' ? ' (30 días)' : ''}</option>)}
-          </select>
-        </div>
-        <div className="col-md-2 d-flex align-items-center">
-          <div className="form-check">
-            <input id="agot" type="checkbox" className="form-check-input" checked={agotados} onChange={(e) => { setPage(1); setAgotados(e.target.checked); }} />
-            <label htmlFor="agot" className="form-check-label">Incluir agotados</label>
+      <Filtros>
+        <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
+          <div className="col-md-4"><input className="form-control" placeholder="SKU, producto o N° de lote" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="col-md-3">
+            <select className="form-select" value={sucursal} onChange={(e) => { setPage(1); setSucursal(e.target.value); }}>
+              <option value="">Todas las sucursales</option>
+              {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
           </div>
-        </div>
-        <div className="col-md-1"><button className="btn btn-outline-secondary w-100"><i className="bi bi-search" /></button></div>
-      </form>
+          <div className="col-md-2">
+            <select className="form-select" value={estado} onChange={(e) => { setPage(1); setEstado(e.target.value); }}>
+              <option value="">Todos</option>
+              {ESTADOS.map(([k, n]) => <option key={k} value={k}>{n}{k === 'por_vencer' ? ' (30 días)' : ''}</option>)}
+            </select>
+          </div>
+          <div className="col-md-2 d-flex align-items-center">
+            <div className="form-check">
+              <input id="agot" type="checkbox" className="form-check-input" checked={agotados} onChange={(e) => { setPage(1); setAgotados(e.target.checked); }} />
+              <label htmlFor="agot" className="form-check-label">Incluir agotados</label>
+            </div>
+          </div>
+          <div className="col-md-1"><button className="btn btn-outline-secondary w-100"><i className="bi bi-search" /></button></div>
+        </form>
+      </Filtros>
 
       {aviso && <div className="alert alert-success py-2">{aviso}</div>}
       <ErrorAlert error={error || actionError} onClose={actionError ? () => setActionError(null) : undefined} />
