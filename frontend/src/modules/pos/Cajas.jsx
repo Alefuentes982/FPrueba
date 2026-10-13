@@ -2,18 +2,27 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { fechaHora } from '../../format.js';
-import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import { useAuth } from '../../AuthContext.jsx';
+import { ErrorAlert, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
+import { esAdministrador } from '../../roles.js';
 
-// Configuración de cajas (administración): una sucursal puede tener varias; cada una admite un turno abierto a la vez.
+// Configuración de cajas: el Administrador (todas las sucursales) y el Jefe de local (las de su sucursal). Una sucursal
+// puede tener varias cajas; cada una admite un turno abierto a la vez. El Administrador define además qué sucursales
+// son farmacia de turno (24 horas): en ellas la caja no se cierra automáticamente a las 23:59.
 export default function Cajas() {
+  const { user } = useAuth();
+  const admin = esAdministrador(user);
   const cajas = useAsync(() => api.get('/pos/cajas'), []);
   const catalogos = useAsync(() => api.get('/catalogos'), []);
+  const sucursales = useAsync(() => api.get('/pos/sucursales'), []);
+  // El Jefe de local con sucursal asignada solo crea cajas en la suya.
+  const opciones = (catalogos.data?.sucursales ?? []).filter((x) => admin || !user.sucursal_id || x.id === user.sucursal_id);
   const [sucursal, setSucursal] = useState('');
   const [error, setError] = useState(null);
 
   const ejecutar = async (fn) => {
     setError(null);
-    try { await fn(); cajas.reload(); } catch (e) { setError(e); }
+    try { await fn(); cajas.reload(); sucursales.reload(); } catch (e) { setError(e); }
   };
 
   return (
@@ -26,7 +35,7 @@ export default function Cajas() {
         <div className="col">
           <select className="form-select" value={sucursal} onChange={(e) => setSucursal(e.target.value)}>
             <option value="">Sucursal de la nueva caja…</option>
-            {catalogos.data?.sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            {opciones.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </div>
         <div className="col-auto">
@@ -35,6 +44,40 @@ export default function Cajas() {
           </button>
         </div>
       </div>
+      <Seccion titulo="Horario de las sucursales" icono="bi-moon-stars" plano>
+        <div className="table-responsive">
+          <table className="table align-middle">
+            <thead><tr><th>Sucursal</th><th>Cierre de caja</th><th /></tr></thead>
+            <tbody>
+              {sucursales.data?.map((x) => (
+                <tr key={x.id}>
+                  <td>{x.nombre}</td>
+                  <td>
+                    {x.farmacia_de_turno
+                      ? <span className="badge text-bg-primary"><i className="bi bi-moon-stars me-1" />Farmacia de turno · 24 horas, sin cierre automático</span>
+                      : <span className="text-muted">Automático a las 23:59 si la caja sigue abierta</span>}
+                  </td>
+                  <td className="text-end">
+                    {admin && (
+                      <button className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                          const msg = x.farmacia_de_turno
+                            ? `¿Quitar a ${x.nombre} como farmacia de turno? Sus cajas se cerrarán automáticamente a las 23:59.`
+                            : `¿Marcar ${x.nombre} como farmacia de turno (24 horas)? Sus cajas no se cerrarán automáticamente.`;
+                          if (window.confirm(msg)) ejecutar(() => api.patch(`/pos/sucursales/${x.id}`, { farmacia_de_turno: !x.farmacia_de_turno }));
+                        }}>
+                        {x.farmacia_de_turno ? 'Quitar farmacia de turno' : 'Marcar como farmacia de turno'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!admin && <div className="small text-muted px-3 pb-2">Solo el Administrador define las farmacias de turno.</div>}
+      </Seccion>
+
       {cajas.loading && !cajas.data ? <Spinner /> : (
         <table className="table align-middle">
           <thead><tr><th>Sucursal</th><th>Caja</th><th>Estado</th><th>Turno abierto</th><th /></tr></thead>

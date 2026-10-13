@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../AuthContext.jsx';
-import { fechaHora } from '../../format.js';
+import { fechaHora, money } from '../../format.js';
+import { montoEnPalabras } from '../../montoEnPalabras.js';
 import { ErrorAlert, Field, Spinner, useAsync } from '../../components/ui.jsx';
+import { esJefeOAdmin } from '../../roles.js';
 
 export default function AbrirTurno({ onAbierto }) {
-  const { can } = useAuth();
+  const { user } = useAuth();
   const [cajaId, setCajaId] = useState('');
   const [monto, setMonto] = useState('0');
   const [error, setError] = useState(null);
@@ -15,6 +17,9 @@ export default function AbrirTurno({ onAbierto }) {
 
   const abrir = async (e) => {
     e.preventDefault();
+    // Confirmación con el monto en palabras: un cero de más se nota antes de abrir (después solo lo corrige el Administrador).
+    const valor = Number(monto || 0);
+    if (!window.confirm(`¿Abrir el turno con ${money(valor)} de efectivo inicial?\n(${montoEnPalabras(valor)})`)) return;
     setError(null);
     setSaving(true);
     try {
@@ -35,7 +40,7 @@ export default function AbrirTurno({ onAbierto }) {
       {cajas.data?.length === 0 ? (
         <div className="alert alert-warning">
           No hay cajas activas para su sucursal.{' '}
-          {can('usuarios') ? <Link to="/pos/cajas">Configurar cajas</Link> : 'Pida a un administrador que cree una caja.'}
+          {esJefeOAdmin(user) ? <Link to="/pos/cajas">Configurar cajas</Link> : 'Pida al Administrador o al Jefe de local que cree una caja.'}
         </div>
       ) : (
         <form onSubmit={abrir} className="fc-formulario">
@@ -51,9 +56,10 @@ export default function AbrirTurno({ onAbierto }) {
           </Field>
           <Field label="Efectivo inicial en la caja" hint="El efectivo con que parte el turno (sencillo).">
             <input type="number" min="0" step="1" required className="form-control" value={monto} onChange={(e) => setMonto(e.target.value)} />
+            {monto !== '' && <div className="form-text">{money(Number(monto))} · {montoEnPalabras(monto)}</div>}
           </Field>
           <button className="btn btn-primary" disabled={saving || !cajaId}>{saving ? 'Abriendo…' : 'Abrir turno'}</button>
-          {can('usuarios') && <Link to="/pos/cajas" className="btn btn-link">Configurar cajas</Link>}
+          {esJefeOAdmin(user) && <Link to="/pos/cajas" className="btn btn-link">Configurar cajas</Link>}
         </form>
       )}
     </div>

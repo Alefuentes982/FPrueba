@@ -1,11 +1,12 @@
 // Turnos de caja. Reglas que impone la base: un solo turno abierto por caja y por usuario, el turno no se edita
-// con UPDATE (se cierra con fn_cerrar_turno) y solo quien lo abrió puede cerrarlo.
+// con UPDATE (se cierra con fn_cerrar_turno) y solo quien lo abrió puede cerrarlo; las excepciones son el cierre
+// automático de las 23:59 y el cierre por fuerza mayor (ver cuadratura y la migración 010).
 import { HttpError, notFound } from '../../core/errors.js';
 
 export async function turnoAbierto(db, usuarioId) {
   const { rows } = await db.query(
     `SELECT t.id, t.fecha_apertura, t.monto_apertura_efectivo, c.id AS caja_id, c.numero AS caja_numero,
-            s.id AS sucursal_id, s.nombre AS sucursal
+            s.id AS sucursal_id, s.nombre AS sucursal, s.farmacia_de_turno
        FROM turno_caja t JOIN caja c ON c.id = t.caja_id JOIN sucursal s ON s.id = c.sucursal_id
       WHERE t.usuario_id = $1 AND t.fecha_cierre IS NULL`, [usuarioId]);
   return rows[0] ?? null;

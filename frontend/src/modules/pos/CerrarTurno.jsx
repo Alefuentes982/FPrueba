@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../api.js';
 import { money } from '../../format.js';
+import { montoEnPalabras } from '../../montoEnPalabras.js';
 import { ErrorAlert } from '../../components/ui.jsx';
 
 // Billetes y monedas de curso legal en Chile, para ayudar a contar el efectivo de la caja.
@@ -18,7 +19,9 @@ export default function CerrarTurno({ turno, onCerrado, onCancelar }) {
   const totalConteo = DENOMINACIONES.reduce((s, d) => s + d * Number(conteo[d] || 0), 0);
 
   const cerrar = async () => {
-    if (!window.confirm('¿Cerrar el turno? Después no podrá registrar más ventas en él.')) return;
+    // Cierre ciego: no se muestra el esperado, pero sí el monto en palabras para detectar un error de digitación.
+    const valor = Number(contado);
+    if (!window.confirm(`¿Cerrar el turno declarando ${money(valor)} contados?\n(${montoEnPalabras(valor)})\n\nDespués no podrá registrar más ventas en él.`)) return;
     setError(null);
     setBusy(true);
     try {
@@ -40,6 +43,7 @@ export default function CerrarTurno({ turno, onCerrado, onCancelar }) {
         <div className="row g-2 align-items-center mb-2">
           <div className="col-md-4">
             <input type="number" min="0" step="1" className="form-control" placeholder="Efectivo contado" autoFocus value={contado} onChange={(e) => setContado(e.target.value)} />
+            {contado !== '' && <div className="form-text">{money(Number(contado))} · {montoEnPalabras(contado)}</div>}
           </div>
           <div className="col-auto d-flex gap-2">
             <button className="btn btn-warning" disabled={busy || contado === ''} onClick={cerrar}>{busy ? 'Cerrando…' : 'Cerrar turno'}</button>

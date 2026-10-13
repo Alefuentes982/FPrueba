@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
 import { useAuth } from '../../AuthContext.jsx';
 import { Slot } from '../../extensiones.jsx';
 import { fechaHora, money } from '../../format.js';
 import { ErrorAlert, Spinner, useAsync } from '../../components/ui.jsx';
+import { esJefeOAdmin } from '../../roles.js';
 import AbrirTurno from './AbrirTurno.jsx';
 import CerrarTurno from './CerrarTurno.jsx';
 import VentaMostrador from './VentaMostrador.jsx';
 
 export default function Pos() {
-  const { can } = useAuth();
+  const { user } = useAuth();
   const turno = useAsync(() => api.get('/pos/turno'), []);
   const catalogos = useAsync(() => api.get('/catalogos'), []);
   const [cierre, setCierre] = useState(null); // resultado del último cierre
@@ -69,11 +70,12 @@ export default function Pos() {
           </span>
           <Slot nombre="pos.acciones" />
           <button className="btn btn-outline-secondary btn-sm" onClick={verVentas}><i className="bi bi-list-ul me-1" />Ventas del turno</button>
-          {can('usuarios') && <Link to="/pos/cajas" className="btn btn-outline-secondary btn-sm"><i className="bi bi-gear" /></Link>}
+          {esJefeOAdmin(user) && <Link to="/pos/cajas" className="btn btn-outline-secondary btn-sm" title="Configurar cajas"><i className="bi bi-gear" /></Link>}
           <button className="btn btn-warning btn-sm" onClick={() => setCerrando(true)}>Cerrar turno</button>
         </div>
       </div>
 
+      <AvisoCierreAutomatico turno={t} />
       <ErrorAlert error={turno.error || error} onClose={() => setError(null)} />
       {cerrando && <CerrarTurno turno={t} onCancelar={() => setCerrando(false)} onCerrado={(r) => { setCerrando(false); setVentas(null); setCierre(r); }} />}
 
@@ -93,5 +95,31 @@ export default function Pos() {
 
       {!cerrando && <VentaMostrador turno={t} medios={medios} onVenta={() => turno.reload()} />}
     </>
+  );
+}
+
+// Minutos que faltan para las 23:59 en Chile (negativo si ya pasó).
+const minutosParaCierre = () => {
+  const [h, m] = new Date().toLocaleTimeString('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .split(':').map(Number);
+  return 23 * 60 + 59 - (h * 60 + m);
+};
+
+// En las sucursales que no son farmacia de turno, la caja se cierra sola a las 23:59: se avisa la última hora.
+function AvisoCierreAutomatico({ turno }) {
+  const [minutos, setMinutos] = useState(minutosParaCierre);
+  useEffect(() => {
+    const id = setInterval(() => setMinutos(minutosParaCierre()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  if (turno.farmacia_de_turno || minutos > 60) return null;
+  return (
+    <div className={`alert ${minutos <= 15 ? 'alert-danger' : 'alert-warning'} d-flex align-items-center gap-2`}>
+      <i className="bi bi-alarm fs-4" />
+      <div>
+        <strong>Esta caja se cerrará automáticamente a las 23:59{minutos >= 0 ? ` (faltan ${minutos} min)` : ''}.</strong>{' '}
+        Ciérrela antes contando el efectivo. Si se cierra sola, el efectivo quedará pendiente de arqueo por el Administrador o el Jefe de local.
+      </div>
+    </div>
   );
 }

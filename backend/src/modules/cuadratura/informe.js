@@ -11,6 +11,17 @@ export async function informeTurno(db, id, user) {
   if (t.abierto && !esSupervisor(user)) throw new HttpError(403, 'El reporte de un turno abierto solo lo ve quien supervisa la caja (administrador o jefe de local).');
   const e = t.efectivo;
   const dif = e.diferencia;
+  const corregido = (campo) => (t.correcciones.some((c) => c.campo === campo) ? ' (corregido)' : '');
+  // Trazabilidad en el documento: correcciones de montos y observaciones, con quién y cuándo.
+  const tipoCierre = t.cierre_tipo === 'automatico'
+    ? `Cierre automático a las 23:59 (el turno seguía abierto).${t.arqueo_fecha ? ` Arqueo registrado por ${t.arqueo_por} el ${hora(t.arqueo_fecha)}.` : ' Arqueo pendiente.'}`
+    : t.cierre_tipo === 'forzado' ? `Cerrado por fuerza mayor por ${t.cerrado_por}. Motivo: ${t.cierre_motivo}` : null;
+  const registro = [
+    ...(tipoCierre ? [tipoCierre] : []),
+    ...t.correcciones.map((c) => `Corrección (${hora(c.fecha)}, ${c.usuario}): ${c.campo === 'apertura' ? 'efectivo inicial' : 'efectivo contado'} `
+      + `de ${clp(c.valor_anterior)} a ${clp(c.valor_nuevo)}. Motivo: ${c.motivo}`),   // la fuente del PDF no tiene la flecha
+    ...t.observaciones.map((o) => `Observación (${hora(o.fecha)}, ${o.usuario}): ${o.texto}`),
+  ];
   const doc = generarDocumentoPdf({
     titulo: t.abierto ? 'REPORTE DE CAJA (X)' : 'CIERRE DE CAJA (Z)',
     codigo: `CAJA ${t.caja_numero} · ${fechaDMA(t.fecha_apertura)}`,
@@ -38,15 +49,19 @@ export async function informeTurno(db, id, user) {
       medio: m.medio_pago, ventas: clp(m.ventas), devoluciones: m.devoluciones ? `-${clp(m.devoluciones)}` : '', neto: clp(m.ventas - m.devoluciones),
     })),
     totales: [
-      ['Efectivo inicial', clp(e.apertura)],
+      [`Efectivo inicial${corregido('apertura')}`, clp(e.apertura)],
       ['+ Ventas en efectivo', clp(e.ventas)],
       ['- Devoluciones en efectivo', `-${clp(e.devoluciones)}`],
       ['Efectivo esperado', clp(e.esperado)],
-      ...(t.abierto ? [] : [['Efectivo contado', clp(e.contado)], ['Diferencia', dif === 0 ? 'Cuadrada' : `${dif > 0 ? 'Sobran' : 'Faltan'} ${clp(Math.abs(dif))}`]]),
+      ...(t.abierto ? [] : t.arqueo_pendiente ? [['Efectivo contado', 'Pendiente de arqueo'], ['Diferencia', 'Pendiente de arqueo']]
+        : [[`Efectivo contado${corregido('cierre')}`, clp(e.contado)], ['Diferencia', dif === 0 ? 'Cuadrada' : `${dif > 0 ? 'Sobran' : 'Faltan'} ${clp(Math.abs(dif))}`]]),
     ],
-    nota: t.revision
-      ? `${t.revision.conforme ? 'Revisado conforme' : 'Revisado con observaciones'} por ${t.revision.revisor} el ${hora(t.revision.fecha)}.${t.revision.observacion ? ` ${t.revision.observacion}` : ''}`
-      : t.abierto ? 'Reporte parcial: el turno sigue abierto.' : 'Pendiente de revisión.',
+    nota: [
+      t.revision
+        ? `${t.revision.conforme ? 'Revisado conforme' : 'Revisado con observaciones'} por ${t.revision.revisor} el ${hora(t.revision.fecha).replace(/\.$/, '')}.${t.revision.observacion ? ` ${t.revision.observacion}` : ''}`
+        : t.abierto ? 'Reporte parcial: el turno sigue abierto.' : t.arqueo_pendiente ? 'Pendiente de arqueo y de revisión.' : 'Pendiente de revisión.',
+      ...registro,
+    ].join('\n'),
     sello: t.abierto ? 'TURNO ABIERTO' : null,
   });
   const pdf = await pdfABuffer(doc);

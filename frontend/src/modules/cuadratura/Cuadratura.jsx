@@ -10,8 +10,9 @@ import Kpi from '../../components/Kpi.jsx';
 import { ErrorAlert, Filtros, PageHeader, Pager, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
 
 const LIMIT = 15;
-const ESTADO_CLASE = { Abierto: 'info', 'Cerrado sin revisar': 'warning', 'Revisado conforme': 'success', 'Revisado con observaciones': 'secondary' };
-const ESTADOS = [['', 'Todos los turnos'], ['abierto', 'Abiertos'], ['cerrado', 'Cerrados'], ['sin_revisar', 'Cerrados sin revisar'], ['con_diferencia', 'Con diferencia de caja']];
+const ESTADO_CLASE = { Abierto: 'info', 'Cerrado sin revisar': 'warning', 'Pendiente de arqueo': 'danger', 'Revisado conforme': 'success', 'Revisado con observaciones': 'secondary' };
+const TIPO_CIERRE = { automatico: ['automático', 'Cerrado automáticamente a las 23:59'], forzado: ['fuerza mayor', 'Cerrado por el Administrador o el Jefe de local'] };
+const ESTADOS = [['', 'Todos los turnos'], ['abierto', 'Abiertos'], ['cerrado', 'Cerrados'], ['sin_revisar', 'Cerrados sin revisar'], ['con_diferencia', 'Con diferencia de caja'], ['corregido', 'Con montos corregidos'], ['pendiente_arqueo', 'Pendientes de arqueo']];
 
 const Dif = ({ v }) => (v == null ? <span className="text-muted">—</span>
   : <span className={v === 0 ? 'text-success' : 'text-danger fw-semibold'}>{v === 0 ? 'Cuadra' : `${v > 0 ? '+' : '-'}${money(Math.abs(v))}`}</span>);
@@ -90,7 +91,8 @@ export default function Cuadratura() {
             <Kpi col="col-6 col-lg-2" titulo="Faltantes" valor={money(s.faltantes)} clase={Number(s.faltantes) > 0 ? 'text-danger' : ''} />
             <Kpi col="col-6 col-lg-2" titulo="Sobrantes" valor={money(s.sobrantes)} clase={Number(s.sobrantes) > 0 ? 'text-warning' : ''} />
             <Kpi col="col-6 col-lg-2" titulo="Sin revisar" valor={s.sin_revisar} onClick={s.sin_revisar ? () => cambiar(setEstado)('sin_revisar') : undefined}
-              sub={s.sin_revisar ? 'ver pendientes' : 'al día'} />
+              sub={s.pendientes_arqueo ? `${s.pendientes_arqueo} pendiente(s) de arqueo` : s.sin_revisar ? 'ver pendientes' : 'al día'}
+              clase={s.pendientes_arqueo ? 'text-danger' : ''} />
           </div>
 
           <Seccion titulo="Desglose del período" icono="bi-bar-chart-line" plano={detalle}
@@ -149,11 +151,18 @@ export default function Cuadratura() {
                     <td className="text-nowrap"><Link to={`/cuadratura/${t.id}`} className="text-decoration-none fw-semibold">{fechaHora(t.fecha_apertura)}</Link></td>
                     <td>{t.sucursal} · Caja {t.caja_numero}</td>
                     <td>{t.cajero}</td>
-                    <td><span className={`badge text-bg-${ESTADO_CLASE[t.estado]}`}>{t.estado}</span></td>
+                    <td>
+                      <span className={`badge text-bg-${ESTADO_CLASE[t.estado]}`}>{t.estado}</span>
+                      {TIPO_CIERRE[t.cierre_tipo] && (
+                        <span className="badge text-bg-light border ms-1" title={TIPO_CIERRE[t.cierre_tipo][1]}>{TIPO_CIERRE[t.cierre_tipo][0]}</span>
+                      )}
+                      {t.corregido && <span className="badge text-bg-danger ms-1" title="Tiene montos corregidos por el Administrador">corregido</span>}
+                      {t.observaciones > 0 && <span className="badge text-bg-light border ms-1" title="Observaciones"><i className="bi bi-chat-left-text me-1" />{t.observaciones}</span>}
+                    </td>
                     <td className="text-end">{money(t.total_ventas)}<div className="small text-muted">{t.ventas} venta(s)</div></td>
                     <td className="text-end">{t.devoluciones ? `-${money(t.total_devoluciones)}` : '—'}</td>
                     <td className="text-end">{t.esperado == null ? '—' : money(t.esperado)}</td>
-                    <td className="text-end">{t.contado == null ? '—' : money(t.contado)}</td>
+                    <td className="text-end">{t.contado != null ? money(t.contado) : t.fecha_cierre ? <span className="text-danger small">pendiente</span> : '—'}</td>
                     <td className="text-end"><Dif v={t.diferencia} /></td>
                     <td className="text-nowrap text-end">
                       <Link to={`/cuadratura/${t.id}`} className="btn btn-sm btn-outline-primary me-1" title="Ver"><i className="bi bi-eye" /></Link>

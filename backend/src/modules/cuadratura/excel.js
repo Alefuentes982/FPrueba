@@ -7,6 +7,7 @@ const hora = (v) => (v ? new Date(v).toLocaleString('es-CL', { timeZone: 'Americ
 const num = (v) => Number(v ?? 0);
 const periodo = ({ desde, hasta }) => (desde && hasta ? `${fechaDMA(desde)} al ${fechaDMA(hasta)}` : desde ? `Desde ${fechaDMA(desde)}` : hasta ? `Hasta ${fechaDMA(hasta)}` : 'Todo el período');
 const MAX_FILAS = 5000;
+const EVENTO = { apertura: 'Apertura', cierre: 'Cierre', arqueo: 'Arqueo', correccion: 'Corrección', observacion: 'Observación', revision: 'Revisión' };
 
 // Listado de turnos (con los mismos filtros de la pantalla) y los indicadores del período.
 export async function excelListado(db, user, filtros, rango) {
@@ -24,6 +25,7 @@ export async function excelListado(db, user, filtros, rango) {
       ['Turnos', resumen.turnos, 'entero'],
       ['Turnos abiertos', resumen.abiertos, 'entero'],
       ['Turnos cerrados sin revisar', resumen.sin_revisar, 'entero'],
+      ['Turnos pendientes de arqueo (cierre automático)', resumen.pendientes_arqueo, 'entero'],
       ['Turnos con diferencia de caja', resumen.con_diferencia, 'entero'],
       ['Ventas', resumen.ventas, 'entero'],
       ['Total vendido', num(resumen.total_ventas), 'clp'],
@@ -55,13 +57,17 @@ export async function excelListado(db, user, filtros, rango) {
       { header: 'Efectivo esperado', key: 'esperado', tipo: 'clp' },
       { header: 'Efectivo contado', key: 'contado', tipo: 'clp' },
       { header: 'Diferencia', key: 'diferencia', tipo: 'clp', suma: true },
+      { header: 'Tipo de cierre', key: 'tipo_cierre', tipo: 'texto' },
+      { header: 'Corregido', key: 'corregido', tipo: 'texto' },
+      { header: 'Observaciones', key: 'observaciones', tipo: 'entero', suma: true },
     ],
     filas: turnos.map((t) => ({
       apertura: hora(t.fecha_apertura), cierre: hora(t.fecha_cierre), sucursal: t.sucursal, caja: t.caja_numero, cajero: t.cajero,
       estado: t.estado, inicial: num(t.monto_apertura_efectivo), ventas: t.ventas, total_ventas: num(t.total_ventas),
       devoluciones: t.devoluciones, total_devoluciones: num(t.total_devoluciones),
       esperado: t.esperado == null ? null : num(t.esperado), contado: t.contado == null ? null : num(t.contado),
-      diferencia: t.diferencia,
+      diferencia: t.diferencia, corregido: t.corregido ? 'Sí' : '', observaciones: t.observaciones,
+      tipo_cierre: { automatico: 'Automático', forzado: 'Fuerza mayor', normal: 'Normal' }[t.cierre_tipo] ?? '',
     })),
   });
 
@@ -109,6 +115,8 @@ export async function excelTurno(db, id, user) {
       ['Cajero', t.cajero],
       ['Apertura', hora(t.fecha_apertura)],
       ['Cierre', t.fecha_cierre ? hora(t.fecha_cierre) : 'Turno abierto'],
+      ['Tipo de cierre', !t.fecha_cierre ? '—' : t.cierre_tipo === 'automatico' ? 'Automático (23:59)' : t.cierre_tipo === 'forzado' ? `Fuerza mayor · ${t.cerrado_por}` : 'Normal'],
+      ...(t.cierre_motivo ? [['Motivo del cierre', t.cierre_motivo]] : []),
       ['Ventas', t.resumen.ventas, 'entero'],
       ['Total vendido', num(t.resumen.total_ventas), 'clp'],
       ['Devoluciones', t.resumen.devoluciones, 'entero'],
@@ -119,11 +127,28 @@ export async function excelTurno(db, id, user) {
         ['+ Ventas en efectivo', num(e.ventas), 'clp'],
         ['- Devoluciones en efectivo', num(e.devoluciones), 'clp'],
         ['Efectivo esperado', num(e.esperado), 'clp', true],
-        ...(t.abierto ? [] : [['Efectivo contado', num(e.contado), 'clp'], ['Diferencia', num(e.diferencia), 'clp', true]]),
+        ...(t.abierto ? [] : t.arqueo_pendiente ? [['Efectivo contado', 'Pendiente de arqueo'], ['Diferencia', 'Pendiente de arqueo']]
+          : [['Efectivo contado', num(e.contado), 'clp'], ['Diferencia', num(e.diferencia), 'clp', true]]),
       ] : []),
       ['Revisión', t.revision ? `${t.revision.conforme ? 'Conforme' : 'Con observaciones'} · ${t.revision.revisor} · ${hora(t.revision.fecha)}` : (t.abierto ? 'Turno abierto' : 'Pendiente de revisión')],
       ...(t.revision?.observacion ? [['Observación de la revisión', t.revision.observacion]] : []),
+      ['Correcciones de montos', t.correcciones.length, 'entero'],
+      ['Observaciones', t.observaciones.length, 'entero'],
     ],
+  });
+
+  // Trazabilidad completa del turno: apertura, cierre, correcciones (con montos anterior y nuevo), observaciones y revisión.
+  agregarHoja(libro, 'Historial', {
+    titulo: `Historial del turno · ${titulo}`,
+    contexto: [`Generado el ${hora(new Date())} por ${user.nombre}`],
+    columnas: [
+      { header: 'Fecha y hora', key: 'fecha', tipo: 'texto' },
+      { header: 'Evento', key: 'evento', tipo: 'texto' },
+      { header: 'Usuario', key: 'usuario', tipo: 'texto' },
+      { header: 'Detalle', key: 'detalle', tipo: 'texto' },
+      { header: 'Motivo / texto', key: 'texto', tipo: 'texto' },
+    ],
+    filas: t.historial.map((h) => ({ fecha: hora(h.fecha), evento: EVENTO[h.tipo] ?? h.tipo, usuario: h.usuario, detalle: h.detalle, texto: h.texto ?? '' })),
   });
 
   if (t.por_medio) {

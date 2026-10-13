@@ -9,13 +9,17 @@ import {
   buscarProductosVendibles, codigoPedido, cotizar, crearPedido, detallePedido, entregarEnMostrador, registrarPagos,
 } from '../pedidos/servicio.js';
 import { aperturaSchema, cajaSchema, cierreSchema, cotizacionSchema, ventaSchema } from './esquemas.js';
+import { esAdministrador, esJefeOAdmin, operaSobreSucursal } from '../../core/roles.js';
 import { abrirTurno, cerrarTurno, resumenTurno, turnoAbierto } from './turnos.js';
 
 const r = Router();
 
-// Configurar cajas es de administración: se usa el permiso de gestión de usuarios como indicador.
-const soloAdmin = (req, _res, next) => (req.user.permisos.includes('usuarios')
-  ? next() : next(new HttpError(403, 'Solo un administrador puede configurar cajas.')));
+// Configurar cajas: el Administrador (todas) y el Jefe de local (las de su sucursal).
+const configuraCajas = (req, _res, next) => (esJefeOAdmin(req.user)
+  ? next() : next(new HttpError(403, 'Solo el Administrador o el Jefe de local pueden configurar cajas.')));
+const exigirSucursal = (user, sucursalId) => {
+  if (!operaSobreSucursal(user, sucursalId)) throw new HttpError(403, 'Solo puede configurar las cajas de su sucursal.');
+};
 
 const exigirTurno = async (db, usuarioId) => {
   const t = await turnoAbierto(db, usuarioId);
@@ -117,21 +121,40 @@ r.get('/cajas', async (req, res) => {
   res.json(rows);
 });
 
-r.post('/cajas', soloAdmin, async (req, res) => {
+r.post('/cajas', configuraCajas, async (req, res) => {
   const { sucursal_id: sucursalId } = cajaSchema.parse(req.body);
+  exigirSucursal(req.user, sucursalId);
   const { rows } = await pool.query(
     `INSERT INTO caja (sucursal_id, numero)
      SELECT $1::uuid, COALESCE(MAX(numero), 0) + 1 FROM caja WHERE sucursal_id = $1 RETURNING id, numero`, [sucursalId]);
   res.status(201).json(rows[0]);
 });
 
-r.patch('/cajas/:id', soloAdmin, async (req, res) => {
+r.patch('/cajas/:id', configuraCajas, async (req, res) => {
   const { activa } = z.object({ activa: z.boolean() }).parse(req.body);
+  const caja = await pool.query('SELECT sucursal_id FROM caja WHERE id = $1', [uuid.parse(req.params.id)]);
+  if (!caja.rows[0]) throw notFound('Caja');
+  exigirSucursal(req.user, caja.rows[0].sucursal_id);
   const abierto = await pool.query('SELECT 1 FROM turno_caja WHERE caja_id = $1 AND fecha_cierre IS NULL', [req.params.id]);
   if (!activa && abierto.rowCount) throw new HttpError(409, 'No se puede desactivar una caja con un turno abierto.');
   const { rowCount } = await pool.query('UPDATE caja SET activa = $1 WHERE id = $2', [activa, req.params.id]);
   if (!rowCount) throw notFound('Caja');
   res.json({ id: req.params.id, activa });
+});
+
+// ---- Sucursales: farmacia de turno (24 horas, sin cierre automático de caja a las 23:59) ---------------------
+r.get('/sucursales', configuraCajas, async (_req, res) => {
+  const { rows } = await pool.query('SELECT id, nombre, farmacia_de_turno FROM sucursal WHERE activa ORDER BY nombre');
+  res.json(rows);
+});
+
+// Solo el Administrador define qué sucursales son farmacia de turno.
+r.patch('/sucursales/:id', async (req, res) => {
+  if (!esAdministrador(req.user)) throw new HttpError(403, 'Solo el Administrador define las farmacias de turno.');
+  const { farmacia_de_turno: deTurno } = z.object({ farmacia_de_turno: z.boolean() }).parse(req.body);
+  const { rowCount } = await pool.query('UPDATE sucursal SET farmacia_de_turno = $1 WHERE id = $2', [deTurno, uuid.parse(req.params.id)]);
+  if (!rowCount) throw notFound('Sucursal');
+  res.json({ id: req.params.id, farmacia_de_turno: deTurno });
 });
 
 export default r;
