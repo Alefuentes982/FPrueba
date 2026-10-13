@@ -1,5 +1,6 @@
 // Generador de documentos comerciales en PDF (órdenes de compra hoy; pedidos y otros después).
 // Recibe datos ya armados: no conoce tablas ni rutas, solo el formato del documento.
+import { readFileSync } from 'node:fs';
 import PDFDocument from 'pdfkit';
 
 // Número correlativo con formato de documento: formatoNumero('OC', 123) -> "OC-000123".
@@ -7,6 +8,14 @@ export const formatoNumero = (prefijo, n) => `${prefijo}-${String(n).padStart(6,
 
 const COLOR = { texto: '#212529', suave: '#6c757d', linea: '#ced4da', acento: '#0d6efd', fondo: '#f1f3f5', alerta: '#dc3545' };
 const MARGEN = 40;
+const MARCA = ['#74109E', '#4BACAB', '#A3C940']; // morado, turquesa y verde del logo
+
+// Logo oficial (PNG con transparencia, 1200 x 282). Se lee una vez al cargar el módulo; si faltara el archivo,
+// el encabezado vuelve a mostrar el nombre en texto y el documento se genera igual.
+const LOGO = (() => {
+  try { return readFileSync(new URL('./recursos/farmaclick-logo.png', import.meta.url)); } catch { return null; }
+})();
+const LOGO_ALTO = 30; // puntos (≈ 10,6 mm); el ancho sale de la proporción del logo (≈ 128 pt)
 
 export const clp = (v) => `$ ${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(Number(v ?? 0))}`;
 export const fechaDMA = (v) => {
@@ -37,16 +46,27 @@ export function generarDocumentoPdf(d) {
   const ancho = doc.page.width - MARGEN * 2;
   const limite = () => doc.page.height - MARGEN - 50; // deja espacio al pie de página
 
-  // Encabezado
-  doc.fillColor(COLOR.acento).font('Helvetica-Bold').fontSize(20).text(d.emisor.nombre, MARGEN, MARGEN, { width: ancho / 2 });
+  // Encabezado: logo a la izquierda (y la razón social bajo él, si la empresa no se llama FarmaClick), título y
+  // código a la derecha, y una línea con los colores de la marca, como en la barra superior del sistema.
+  if (LOGO) {
+    doc.image(LOGO, MARGEN, MARGEN, { height: LOGO_ALTO });
+    doc.y = MARGEN + LOGO_ALTO + 6;
+    if (d.emisor.nombre && d.emisor.nombre !== 'FarmaClick') {
+      doc.fillColor(COLOR.texto).font('Helvetica-Bold').fontSize(10).text(d.emisor.nombre, MARGEN, doc.y, { width: ancho / 2 });
+    }
+  } else {
+    doc.fillColor(COLOR.acento).font('Helvetica-Bold').fontSize(20).text(d.emisor.nombre, MARGEN, MARGEN, { width: ancho / 2 });
+  }
   doc.fillColor(COLOR.suave).font('Helvetica').fontSize(9);
   (d.emisor.lineas ?? []).forEach((l) => doc.text(l, MARGEN, doc.y, { width: ancho / 2 }));
   const finEmisor = doc.y;
   doc.fillColor(COLOR.texto).font('Helvetica-Bold').fontSize(15).text(d.titulo, MARGEN + ancho / 2, MARGEN, { width: ancho / 2, align: 'right' });
   doc.fontSize(13).fillColor(COLOR.acento).text(d.codigo, MARGEN + ancho / 2, doc.y, { width: ancho / 2, align: 'right' });
   doc.y = Math.max(doc.y, finEmisor) + 10;
-  doc.moveTo(MARGEN, doc.y).lineTo(MARGEN + ancho, doc.y).strokeColor(COLOR.linea).stroke();
-  doc.y += 12;
+  const linea = doc.linearGradient(MARGEN, 0, MARGEN + ancho, 0);
+  linea.stop(0, MARCA[0]).stop(0.45, MARCA[1]).stop(1, MARCA[2]);
+  doc.rect(MARGEN, doc.y, ancho, 2).fill(linea);
+  doc.y += 14;
 
   // Metadatos (fecha, entrega esperada, emisor…) en una fila
   if (d.metadatos?.length) {
