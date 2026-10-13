@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext.jsx';
 import { Spinner } from './components/ui.jsx';
 import modulos from './modules/index.js';
 import Login from './modules/auth/Login.jsx';
+import logo from './assets/farmaclick-logo.svg';
 
 const entradas = modulos
   .flatMap((m) => m.nav.map((n) => ({ ...n, modulo: m.modulo })))
@@ -14,10 +15,10 @@ function Layout() {
     <>
       <header className="fc-topbar">
         <div className="container d-flex align-items-center justify-content-between py-2">
-          <span className="navbar-brand fs-5 m-0"><i className="bi bi-heart-pulse me-2" />FarmaClick</span>
-          <div className="d-flex align-items-center gap-3 text-white text-nowrap">
-            <span className="small" title={user.nombre}><i className="bi bi-person-circle me-1" />{user.nombre} · {user.rol}</span>
-            <button className="btn btn-sm btn-outline-light" onClick={logout}>Salir</button>
+          <img src={logo} alt="FarmaClick" className="fc-logo" />
+          <div className="d-flex align-items-center gap-3 text-nowrap fc-topbar-usuario">
+            <span className="small text-truncate" title={`${user.nombre} · ${user.rol}`}><i className="bi bi-person-circle me-1" />{user.nombre} · {user.rol}</span>
+            <button className="btn btn-sm btn-outline-secondary" onClick={logout}>Salir</button>
           </div>
         </div>
       </header>

@@ -16,8 +16,17 @@ body { background: var(--fc-fondo); color: var(--fc-texto); }
 main.container { padding-top: 0.25rem; }
 
 /* ---- Barra superior y navegación ---- */
-.fc-topbar { background: var(--fc-primario-oscuro); color: #fff; }
-.fc-topbar .navbar-brand { color: #fff; font-weight: 700; letter-spacing: 0.01em; }
+/* Barra blanca con el logo a color y una línea con los colores de la marca (morado, turquesa, verde). */
+:root { --fc-marca-morado: #74109E; --fc-marca-turquesa: #4BACAB; --fc-marca-verde: #A3C940; }
+.fc-topbar {
+  background: var(--fc-superficie); color: var(--fc-texto);
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--fc-marca-morado), var(--fc-marca-turquesa) 45%, var(--fc-marca-verde)) 1;
+}
+.fc-logo { height: 36px; width: auto; display: block; flex-shrink: 0; }
+.fc-topbar-usuario { min-width: 0; margin-left: 1rem; }
+@media (max-width: 575.98px) { .fc-logo { height: 28px; } }
+.fc-logo-login { height: auto; width: 100%; max-width: 300px; display: block; margin: 0 auto 0.75rem; }
 .fc-nav { background: var(--fc-superficie); border-bottom: 1px solid var(--fc-borde); box-shadow: var(--fc-sombra); margin-bottom: 1.5rem; }
 .fc-nav .fc-nav-lista { display: flex; flex-wrap: wrap; gap: 0 0.1rem; }
 .fc-nav .nav-link { color: #4b5563; padding: 0.65rem 0.6rem; font-size: 0.9rem; font-weight: 500; white-space: nowrap; border-bottom: 3px solid transparent; }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
 import { ErrorAlert } from '../../components/ui.jsx';
+import logo from '../../assets/farmaclick-logo.svg';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -29,7 +30,7 @@ export default function Login() {
     <div className="min-vh-100 d-flex align-items-center bg-light">
       <div className="container" style={{ maxWidth: 420 }}>
         <div className="text-center mb-4">
-          <h1 className="h3 text-primary"><i className="bi bi-heart-pulse me-2" />FarmaClick</h1>
+          <h1 className="m-0"><img src={logo} alt="FarmaClick" className="fc-logo-login" /></h1>
           <p className="text-muted mb-0">Ingrese con su cuenta</p>
         </div>
         <form className="card card-body shadow-sm" onSubmit={enviar}>
