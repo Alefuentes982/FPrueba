@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool, withTx } from '../../core/db.js';
 import { notFound } from '../../core/errors.js';
-import { buildUpdate, likeParam, listResponse, paging, uuid } from '../../core/sql.js';
+import { buildUpdate, likeParam, listResponse, optionalText, paging, uuid } from '../../core/sql.js';
 
 const r = Router();
 
@@ -16,7 +16,13 @@ const campos = {
   requiere_lote: z.boolean(),
   categoria_id: uuid,
   condicion_venta_id: uuid,
+  // Contenido de la ficha pública de la tienda (opcional).
+  descripcion: optionalText(2000),
+  presentacion: optionalText(100),
+  // Foto para la tienda: dirección https de una imagen ya publicada. Vacío = sin foto.
+  imagen_url: optionalText(500).refine((v) => v == null || /^https:\/\/\S+$/.test(v), 'La imagen debe ser una dirección https://.'),
 };
+
 // El costo solo se informa al crear; después lo mantiene el PMP de cada recepción de OC.
 const crear = z.object({
   ...campos,
@@ -33,7 +39,7 @@ const proveedoresSchema = z
 
 const COLUMNAS = `p.id, p.sku, p.nombre, p.costo, p.margen_utilidad, p.precio, p.activo, p.stock_total_web,
          p.requiere_vencimiento, p.requiere_lote, p.categoria_id, c.nombre AS categoria,
-         p.condicion_venta_id, cv.nombre AS condicion_venta`;
+         p.condicion_venta_id, cv.nombre AS condicion_venta, p.descripcion, p.presentacion, p.imagen_url`;
 const FROM = `FROM producto p
     JOIN categoria c ON c.id = p.categoria_id
     JOIN condicion_venta cv ON cv.id = p.condicion_venta_id`;
@@ -76,9 +82,7 @@ r.get('/:id', async (req, res) => res.json(await getProducto(pool, req.params.id
 r.post('/', async (req, res) => {
   const d = crear.parse(req.body);
   const { rows } = await pool.query(
-    `INSERT INTO producto (sku, nombre, costo, margen_utilidad, activo, requiere_vencimiento, requiere_lote, categoria_id, condicion_venta_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-    [d.sku, d.nombre, d.costo, d.margen_utilidad, d.activo, d.requiere_vencimiento, d.requiere_lote, d.categoria_id, d.condicion_venta_id]);
+    `INSERT INTO producto (sku, nombre, costo, margen_utilidad, activo, requiere_vencimiento, requiere_lote, categoria_id, condicion_venta_id, descripcion, presentacion, imagen_url)VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`, [d.sku, d.nombre, d.costo, d.margen_utilidad, d.activo, d.requiere_vencimiento, d.requiere_lote, d.categoria_id, d.condicion_venta_id, d.descripcion ?? null, d.presentacion ?? null, d.imagen_url ?? null]);
   res.status(201).json(await getProducto(pool, rows[0].id));
 });
 
