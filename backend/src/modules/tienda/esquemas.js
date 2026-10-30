@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { uuid } from '../../core/sql.js';
-import { ORDENES } from './reglas.js';
+import { MAX_CANTIDAD, MAX_LINEAS, ORDENES } from './reglas.js';
 
 // Un parámetro de la URL vacío ("?categoria_id=") se trata como ausente.
 const vacioANulo = (v) => (v === '' || v == null ? undefined : v);
@@ -20,4 +20,12 @@ export const filtrosCatalogo = z.object({
 }).refine((f) => f.precio_min == null || f.precio_max == null || f.precio_min <= f.precio_max, {
   message: 'El precio mínimo no puede ser mayor que el máximo.',
   path: ['precio_min'],
+});
+
+// POST /api/tienda/carrito/cotizar  { items: [{ producto_id, cantidad }] }
+export const carritoSchema = z.object({
+  items: z.array(z.object({
+    producto_id: uuid,
+    cantidad: z.number().int().min(1, 'La cantidad mínima es 1.').max(MAX_CANTIDAD, `La cantidad máxima es ${MAX_CANTIDAD}.`),
+  })).max(MAX_LINEAS, `El carrito admite hasta ${MAX_LINEAS} productos distintos.`),
 });

@@ -3,7 +3,8 @@
 // la disponibilidad de vw_stock_disponible (sin lotes vencidos), sumando solo las sucursales que venden en línea.
 import { notFound } from '../../core/errors.js';
 import { likeParam } from '../../core/sql.js';
-import { descuentoVisible, ordenSql } from './reglas.js';
+import { cotizar } from '../pedidos/servicio.js';
+import { descuentoVisible, estadoLinea, ordenSql, totalesCarrito, unirLineas } from './reglas.js';
 
 // Unidades disponibles por producto en las sucursales activas que venden en línea.
 const DISPONIBLE_WEB = `
@@ -157,4 +158,52 @@ export async function fichaProducto(db, id) {
       hasta: r.cantidad_maxima,
     })),
   };
+}
+
+// Cotización del carrito con los precios y descuentos del servidor. No guarda nada.
+// Las líneas que no se pueden vender vuelven con su estado para que el cliente las corrija.
+export async function cotizarCarrito(db, items) {
+  const pedidas = unirLineas(items);
+  const { rows } = await db.query(
+    `WITH ${DISPONIBLE_WEB}
+     SELECT c.id, c.sku, c.nombre, c.precio, c.categoria, p.presentacion, p.imagen_url,
+            COALESCE(dw.disponible, 0) AS disponible
+       FROM vw_catalogo_web c
+       JOIN producto p ON p.id = c.id
+       LEFT JOIN disponible_web dw ON dw.producto_id = c.id
+      WHERE c.id = ANY($1::uuid[])`, [pedidas.map((x) => x.producto_id)]);
+  const enCatalogo = new Map(rows.map((r) => [r.id, r]));
+
+  const evaluadas = pedidas.map((x) => {
+    const p = enCatalogo.get(x.producto_id);
+    const disponible = p ? Number(p.disponible) : 0;
+    return { ...x, p, disponible, estado: estadoLinea({ enCatalogo: Boolean(p), disponible, cantidad: x.cantidad }) };
+  });
+
+  // Precios y descuentos con la misma regla y redondeo que usará el pedido (cotizar del núcleo de pedidos).
+  const conPrecio = evaluadas.filter((x) => x.p && x.disponible > 0);
+  const cot = conPrecio.length
+    ? await cotizar(db, conPrecio.map((x) => ({ producto_id: x.producto_id, cantidad: x.cantidad })))
+    : { lineas: [] };
+  const precioDe = new Map(cot.lineas.map((l) => [l.producto_id, l]));
+
+  const lineas = evaluadas.map((x) => {
+    const l = precioDe.get(x.producto_id);
+    return {
+      producto_id: x.producto_id,
+      sku: x.p?.sku ?? null,
+      nombre: x.p?.nombre ?? null,
+      categoria: x.p?.categoria ?? null,
+      presentacion: x.p?.presentacion ?? null,
+      imagen_url: x.p?.imagen_url ?? null,
+      cantidad: x.cantidad,
+      disponible: x.disponible,
+      estado: x.estado,
+      precio_unitario: l ? l.precio_unitario : (x.p ? Number(x.p.precio) : 0),
+      descuento: l ? l.descuento : 0,
+      regla: l?.regla ?? null,
+      subtotal: l ? l.subtotal : 0,
+    };
+  });
+  return { lineas, ...totalesCarrito(lineas) };
 }

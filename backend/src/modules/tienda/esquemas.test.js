@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { filtrosCatalogo } from './esquemas.js';
+import { carritoSchema, filtrosCatalogo } from './esquemas.js';
+
+const id = (n) => `00000000-0000-4000-8000-00000000000${n}`;
 
 test('filtros del catálogo con valores por defecto', () => {
   const d = filtrosCatalogo.parse({});
@@ -36,4 +38,14 @@ test('filtros del catálogo rechazan valores fuera de rango', () => {
   assert.equal(filtrosCatalogo.safeParse({ page: '0' }).success, false);
   assert.equal(filtrosCatalogo.safeParse({ orden: 'costo' }).success, false);
   assert.equal(filtrosCatalogo.safeParse({ categoria_id: 'abc' }).success, false);
+});
+
+test('carrito valida identificadores y cantidades', () => {
+  assert.equal(carritoSchema.safeParse({ items: [] }).success, true);
+  assert.equal(carritoSchema.safeParse({ items: [{ producto_id: id(1), cantidad: 2 }] }).success, true);
+  assert.equal(carritoSchema.safeParse({ items: [{ producto_id: id(1), cantidad: 0 }] }).success, false);
+  assert.equal(carritoSchema.safeParse({ items: [{ producto_id: id(1), cantidad: 100 }] }).success, false);
+  assert.equal(carritoSchema.safeParse({ items: [{ producto_id: 'x', cantidad: 1 }] }).success, false);
+  const muchos = Array.from({ length: 31 }, () => ({ producto_id: id(1), cantidad: 1 }));
+  assert.equal(carritoSchema.safeParse({ items: muchos }).success, false);
 });
