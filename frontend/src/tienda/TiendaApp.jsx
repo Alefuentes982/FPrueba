@@ -2,6 +2,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import Catalogo from './Catalogo.jsx';
 import { DatosTiendaProvider } from './DatosTienda.jsx';
 import Encabezado from './Encabezado.jsx';
+import Ficha from './Ficha.jsx';
 import Informacion from './Informacion.jsx';
 import Pie from './Pie.jsx';
 import Portada from './Portada.jsx';
@@ -18,6 +19,7 @@ export default function TiendaApp() {
           <Routes>
             <Route index element={<Portada />} />
             <Route path="productos" element={<Catalogo />} />
+            <Route path="producto/:id" element={<Ficha />} />
             <Route path="informacion" element={<Informacion />} />
             <Route path="*" element={<NoEncontrada />} />
           </Routes>

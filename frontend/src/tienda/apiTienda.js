@@ -19,4 +19,5 @@ export const tiendaApi = {
   sucursales: () => pedir('/sucursales'),
   categorias: () => pedir('/categorias'),
   productos: (filtros) => pedir(`/productos${qs(filtros)}`),
+  producto: (id) => pedir(`/productos/${id}`),
 };
