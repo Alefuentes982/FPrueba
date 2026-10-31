@@ -15,7 +15,7 @@ Requisitos: Docker y Git.
 ```bash
 docker compose up
 ```
-- Web: http://localhost:5173 · API: http://localhost:3000/api/health · PostgreSQL: `localhost:54329` (`postgres` / `postgres`, base `farmaclick`).
+- Web: http://localhost:5173 · Tienda en línea: http://localhost:5173/tienda · API: http://localhost:3000/api/health · PostgreSQL: `localhost:54329` (`postgres` / `postgres`, base `farmaclick`).
 - Usuarios de desarrollo: `admin@farmaclick.local` / `Admin12345` y `vendedor@farmaclick.local` / `Vendedor12345`.
 - Pruebas: `docker compose exec api npm test`. Base desde cero: `docker compose down -v`.
 - El login local (`AUTH_MODE=local`) solo existe en desarrollo; la API no arranca con él si `NODE_ENV=production`.

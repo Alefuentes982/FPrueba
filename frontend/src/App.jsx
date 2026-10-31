@@ -1,9 +1,13 @@
+import { Suspense, lazy } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 import { Spinner } from './components/ui.jsx';
 import modulos from './modules/index.js';
 import Login from './modules/auth/Login.jsx';
 import logo from './assets/farmaclick-logo.svg';
+// La tienda se carga en un archivo aparte: el personal no descarga su código.
+const TiendaApp = lazy(() => import('./tienda/TiendaApp.jsx'));
+const esTienda = (ruta) => ruta === '/tienda' || ruta.startsWith('/tienda/');
 
 const entradas = modulos
   .flatMap((m) => m.nav.map((n) => ({ ...n, modulo: m.modulo })))
@@ -60,6 +64,14 @@ function Guard({ modulo, children }) {
 export default function App() {
   const { user, cargando } = useAuth();
   const location = useLocation();
+  // La tienda es pública: no espera la sesión ni redirige al login.
+  if (esTienda(location.pathname)) {
+    return (
+      <Suspense fallback={<Spinner />}>
+        <Routes><Route path="/tienda/*" element={<TiendaApp />} /></Routes>
+      </Suspense>
+    );
+  }
   if (cargando) return <Spinner />;
   if (!user) {
     return (
