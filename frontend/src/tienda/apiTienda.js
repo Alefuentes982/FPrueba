@@ -18,4 +18,5 @@ async function pedir(ruta, { method = 'GET', body } = {}) {
 export const tiendaApi = {
   sucursales: () => pedir('/sucursales'),
   categorias: () => pedir('/categorias'),
+  productos: (filtros) => pedir(`/productos${qs(filtros)}`),
 };

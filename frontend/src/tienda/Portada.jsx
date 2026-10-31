@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BANNER_PRINCIPAL, BANNERS_LATERALES, BENEFICIOS, FARMACIA, SALUD } from './contenido.js';
+import { BANNER_PRINCIPAL, BANNERS_LATERALES, BENEFICIOS, BLOQUES_CATEGORIA, FARMACIA, SALUD } from './contenido.js';
 import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
 import Envase from './Envase.jsx';
+import { tiendaApi } from './apiTienda.js';
+import TarjetaProducto from './TarjetaProducto.jsx';
 
 // Portada de la tienda (diseño aprobado el 27-10-2026, versión clara). Las secciones siguen el orden de las
 // referencias: banners, accesos rápidos, ofertas, retiro en el día, categorías, bloques por categoría, información de
@@ -13,6 +15,7 @@ export default function Portada() {
     <>
       <Banners categoriaPorNombre={categoriaPorNombre} />
       <AccesosRapidos />
+      <OfertasDestacadas />
       <AvisoRetiro />
       {categorias.length > 0 && (
         <section className="fct-seccion">
@@ -29,6 +32,7 @@ export default function Portada() {
           </div>
         </section>
       )}
+      <BloquesCategoria categoriaPorNombre={categoriaPorNombre} />
       <Salud />
       <Beneficios />
     </>
@@ -178,6 +182,64 @@ function Beneficios() {
           <b>FarmaClick</b> es una farmacia con venta en línea de medicamentos de venta directa, dermocosmética, vitaminas y
           productos para el bebé. Los precios publicados incluyen IVA y corresponden a la venta en línea.
         </p>
+      </div>
+    </section>
+  );
+}
+
+// ---- Secciones con productos (HU-66) ----
+
+// Carrusel de productos con descuento, de mayor a menor porcentaje. Sin ofertas vigentes, la sección no aparece.
+function OfertasDestacadas() {
+  const [productos, setProductos] = useState([]);
+  const pista = useRef(null);
+  useEffect(() => {
+    tiendaApi.productos({ con_descuento: 1, orden: 'descuento', limit: 10 }).then((r) => setProductos(r.data)).catch(() => setProductos([]));
+  }, []);
+  if (productos.length === 0) return null;
+  const mover = (dir) => pista.current?.scrollBy({ left: dir * pista.current.clientWidth * 0.8, behavior: 'smooth' });
+  return (
+    <section className="fct-seccion">
+      <div className="fct-wrap">
+        <div className="fct-titulo-seccion"><h2>Ofertas destacadas</h2><Link to="/tienda/productos?ofertas=1">Ver todas las ofertas</Link></div>
+        <div className="fct-carrusel">
+          <div className="fct-carrusel-pista" ref={pista}>
+            {productos.map((p) => <TarjetaProducto key={p.id} producto={p} />)}
+          </div>
+          <button type="button" className="fct-flecha fct-flecha-izq" aria-label="Ver anteriores" onClick={() => mover(-1)}><i className="bi bi-chevron-left" /></button>
+          <button type="button" className="fct-flecha fct-flecha-der" aria-label="Ver siguientes" onClick={() => mover(1)}><i className="bi bi-chevron-right" /></button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Un bloque por categoría de contenido.js: banner de la categoría y sus 4 productos más vendidos.
+function BloquesCategoria({ categoriaPorNombre }) {
+  return BLOQUES_CATEGORIA.map((b) => {
+    const categoria = categoriaPorNombre(b.categoria);
+    return categoria ? <BloqueCategoria key={b.categoria} bloque={b} categoria={categoria} /> : null;
+  });
+}
+
+function BloqueCategoria({ bloque, categoria }) {
+  const [productos, setProductos] = useState([]);
+  useEffect(() => {
+    tiendaApi.productos({ categoria_id: categoria.id, limit: 4 }).then((r) => setProductos(r.data)).catch(() => setProductos([]));
+  }, [categoria.id]);
+  if (productos.length === 0) return null;
+  return (
+    <section className="fct-seccion">
+      <div className="fct-wrap">
+        <div className="fct-titulo-seccion"><h2>{categoria.nombre}</h2><Link to={enlaceCategoria(categoria)}>Ver todos los productos</Link></div>
+        <div className="fct-bloque">
+          <Link to={enlaceCategoria(categoria)} className={`fct-bloque-portada fct-tono-${bloque.tono}`}>
+            <div><h3>{bloque.titulo}</h3><p>{bloque.texto}</p></div>
+            <div className="fct-bloque-dibujo" aria-hidden="true"><Envase categoria={categoria.nombre} semillaId={bloque.titulo} /></div>
+            <span>Ir a la categoría</span>
+          </Link>
+          {productos.map((p) => <TarjetaProducto key={p.id} producto={p} />)}
+        </div>
       </div>
     </section>
   );

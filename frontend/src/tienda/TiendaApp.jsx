@@ -1,4 +1,5 @@
 import { Link, Route, Routes } from 'react-router-dom';
+import Catalogo from './Catalogo.jsx';
 import { DatosTiendaProvider } from './DatosTienda.jsx';
 import Encabezado from './Encabezado.jsx';
 import Informacion from './Informacion.jsx';
@@ -16,6 +17,7 @@ export default function TiendaApp() {
         <main className="fct-contenido">
           <Routes>
             <Route index element={<Portada />} />
+            <Route path="productos" element={<Catalogo />} />
             <Route path="informacion" element={<Informacion />} />
             <Route path="*" element={<NoEncontrada />} />
           </Routes>
