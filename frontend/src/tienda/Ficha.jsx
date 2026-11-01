@@ -3,14 +3,16 @@ import { Link, useParams } from 'react-router-dom';
 import { money } from '../format.js';
 import { tiendaApi } from './apiTienda.js';
 import { FUNCIONES } from './contenido.js';
-import { Aviso, Cargando, EtiquetaDescuento, ImagenProducto, Migas } from './comunes.jsx';
+import { Aviso, Cargando, EtiquetaDescuento, ImagenProducto, Migas, SelectorCantidad } from './comunes.jsx';
+import { useCarrito } from './CarritoContext.jsx';
+import { MAX_CANTIDAD } from './carrito.js';
 import { enlaceCategoria } from './DatosTienda.jsx';
 import TarjetaProducto from './TarjetaProducto.jsx';
 
 const PESTANAS = ['Descripción', 'Ficha técnica', 'Aviso legal'];
 
-// Ficha del producto: foto, precio con ofertas, disponibilidad por sucursal, pestañas y relacionados.
-// Sin stock se muestra agotado.
+// Ficha del producto: foto, precio con ofertas, compra, disponibilidad por sucursal, pestañas y relacionados.
+// Sin stock se muestra agotado y no se puede agregar al carro.
 export default function Ficha() {
   const { id } = useParams();
   const [producto, setProducto] = useState(null);
@@ -78,7 +80,9 @@ export default function Ficha() {
             ))}
           </div>
 
-          {producto.agotado && <div className="fct-agotado"><i className="bi bi-x-circle" aria-hidden="true" />Agotado por ahora</div>}
+          {producto.agotado
+            ? <div className="fct-agotado"><i className="bi bi-x-circle" aria-hidden="true" />Agotado por ahora</div>
+            : <Comprar producto={producto} />}
 
           <div className="fct-disponibilidad">
             {producto.sucursales.map((s) => (
@@ -144,5 +148,38 @@ function Relacionados({ producto }) {
       </div>
       <div className="fct-grilla fct-grilla-5">{lista.map((p) => <TarjetaProducto key={p.id} producto={p} />)}</div>
     </section>
+  );
+}
+
+// ---- Compra (HU-70) ----
+
+// Cantidad y botón "Agregar al carro". No deja pasar lo disponible menos lo que ya está en el carro.
+function Comprar({ producto }) {
+  const { agregar, cantidadDe } = useCarrito();
+  const [cantidad, setCantidad] = useState(1);
+  const [aviso, setAviso] = useState(null);
+  const enCarro = cantidadDe(producto.id);
+  const maximo = Math.max(Math.min(producto.disponible, MAX_CANTIDAD) - enCarro, 0);
+
+  const alAgregar = () => {
+    const n = agregar(producto, Math.min(cantidad, maximo));
+    setAviso(n ? `${n === 1 ? 'Agregaste 1 unidad' : `Agregaste ${n} unidades`} al carro.` : 'Ya tienes en el carro todas las unidades disponibles.');
+    setCantidad(1);
+  };
+
+  return (
+    <>
+      <div className="fct-comprar">
+        <SelectorCantidad valor={Math.min(cantidad, Math.max(maximo, 1))} max={Math.max(maximo, 1)} onCambiar={setCantidad} disabled={maximo === 0} />
+        <button type="button" className="fct-btn-agregar" disabled={maximo === 0} onClick={alAgregar}>Agregar al carro</button>
+      </div>
+      {(aviso || enCarro > 0) && (
+        <div className="fct-confirmacion" role="status">
+          <i className="bi bi-check-circle" aria-hidden="true" />
+          <span>{aviso ?? `Tienes ${enCarro} en el carro.`}</span>
+          <Link to="/tienda/carrito">Ver carro</Link>
+        </div>
+      )}
+    </>
   );
 }

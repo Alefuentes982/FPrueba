@@ -1,4 +1,6 @@
 import { Link, Route, Routes } from 'react-router-dom';
+import { CarritoProvider } from './CarritoContext.jsx';
+import Carrito from './Carrito.jsx';
 import Catalogo from './Catalogo.jsx';
 import { DatosTiendaProvider } from './DatosTienda.jsx';
 import Encabezado from './Encabezado.jsx';
@@ -13,19 +15,22 @@ import './tienda.css';
 export default function TiendaApp() {
   return (
     <DatosTiendaProvider>
-      <div className="fct">
-        <Encabezado />
-        <main className="fct-contenido">
-          <Routes>
-            <Route index element={<Portada />} />
-            <Route path="productos" element={<Catalogo />} />
-            <Route path="producto/:id" element={<Ficha />} />
-            <Route path="informacion" element={<Informacion />} />
-            <Route path="*" element={<NoEncontrada />} />
-          </Routes>
-        </main>
-        <Pie />
-      </div>
+      <CarritoProvider>
+        <div className="fct">
+          <Encabezado />
+          <main className="fct-contenido">
+            <Routes>
+              <Route index element={<Portada />} />
+              <Route path="productos" element={<Catalogo />} />
+              <Route path="producto/:id" element={<Ficha />} />
+              <Route path="carrito" element={<Carrito />} />
+              <Route path="informacion" element={<Informacion />} />
+              <Route path="*" element={<NoEncontrada />} />
+            </Routes>
+          </main>
+          <Pie />
+        </div>
+      </CarritoProvider>
     </DatosTiendaProvider>
   );
 }

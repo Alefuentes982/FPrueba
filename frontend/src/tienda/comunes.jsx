@@ -39,6 +39,25 @@ export function Precio({ producto, grande = false }) {
   );
 }
 
+// Cantidad con botones − y +. max limita lo que se puede pedir (stock disponible).
+export function SelectorCantidad({ valor, max, onCambiar, disabled = false, etiqueta = 'Cantidad', compacto = false }) {
+  return (
+    <div className={`fct-cantidad${compacto ? ' fct-cantidad-compacta' : ''}`} role="group" aria-label={etiqueta}>
+      <button type="button" aria-label="Quitar uno" disabled={disabled || valor <= 1} onClick={() => onCambiar(valor - 1)}>
+        <i className="bi bi-dash-lg" />
+      </button>
+      <input inputMode="numeric" aria-label={etiqueta} value={valor} disabled={disabled}
+        onChange={(e) => {
+          const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
+          if (Number.isFinite(n)) onCambiar(Math.min(Math.max(n, 1), max));
+        }} />
+      <button type="button" aria-label="Agregar uno" disabled={disabled || valor >= max} onClick={() => onCambiar(valor + 1)}>
+        <i className="bi bi-plus-lg" />
+      </button>
+    </div>
+  );
+}
+
 // Ruta de navegación. pasos = [{ texto, a }]; el último va sin enlace.
 export function Migas({ pasos }) {
   return (

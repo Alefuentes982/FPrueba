@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import logo from '../assets/farmaclick-logo.svg';
+import { useCarrito } from './CarritoContext.jsx';
 import { FARMACIA, FUNCIONES } from './contenido.js';
 import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
 
@@ -10,6 +11,7 @@ export default function Encabezado() {
   const location = useLocation();
   const [params] = useSearchParams();
   const { categorias, sucursales } = useDatosTienda();
+  const { unidades } = useCarrito();
   const [texto, setTexto] = useState(params.get('q') ?? '');
   const [panel, setPanel] = useState(false);
 
@@ -68,6 +70,11 @@ export default function Encabezado() {
               <i className="bi bi-person" aria-hidden="true" /><span><small>Hola,</small>Inicia sesión</span>
             </Link>
           )}
+          <Link to="/tienda/carrito" className="fct-carro" aria-label={`Mi carro, ${unidades} unidades`}>
+            <i className="bi bi-cart3" aria-hidden="true" />
+            {unidades > 0 && <b>{unidades > 99 ? '99+' : unidades}</b>}
+            <span><small>Mi carro</small>{unidades === 1 ? '1 unidad' : `${unidades} unidades`}</span>
+          </Link>
         </div>
       </header>
 

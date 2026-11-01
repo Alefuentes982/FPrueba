@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
+import BotonAgregar from './BotonAgregar.jsx';
 import { FUNCIONES } from './contenido.js';
 import { EtiquetaDescuento, ImagenProducto, Precio } from './comunes.jsx';
 
-// Tarjeta del listado: foto, categoría, nombre, precio (normal tachado si hay oferta) y modalidades.
+// Tarjeta del listado: foto, categoría, nombre, precio (normal tachado si hay oferta), modalidades y botón del carro.
 export default function TarjetaProducto({ producto }) {
   return (
     <article className="fct-card">
@@ -20,6 +21,7 @@ export default function TarjetaProducto({ producto }) {
         <span><i className="bi bi-shop" aria-hidden="true" />Retiro en farmacia</span>
         {FUNCIONES.despacho && <span><i className="bi bi-truck" aria-hidden="true" />Despacho</span>}
       </div>
+      <BotonAgregar producto={producto} />
     </article>
   );
 }

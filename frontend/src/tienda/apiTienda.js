@@ -20,4 +20,5 @@ export const tiendaApi = {
   categorias: () => pedir('/categorias'),
   productos: (filtros) => pedir(`/productos${qs(filtros)}`),
   producto: (id) => pedir(`/productos/${id}`),
+  cotizar: (items) => pedir('/carrito/cotizar', { method: 'POST', body: { items } }),
 };
