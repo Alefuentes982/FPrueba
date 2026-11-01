@@ -7,6 +7,7 @@ import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../componen
 const vacio = {
   sku: '', nombre: '', costo: '0', margenPct: '', activo: true,
   requiere_vencimiento: true, requiere_lote: true, categoria_id: '', condicion_venta_id: '',
+  descripcion: '', presentacion: '', imagen_url: '',
 };
 
 export default function ProductoForm() {
@@ -33,6 +34,7 @@ export default function ProductoForm() {
       margenPct: String(Math.round(Number(p.margen_utilidad) * 10000) / 100),
       activo: p.activo, requiere_vencimiento: p.requiere_vencimiento, requiere_lote: p.requiere_lote,
       categoria_id: p.categoria_id, condicion_venta_id: p.condicion_venta_id,
+      descripcion: p.descripcion ?? '', presentacion: p.presentacion ?? '', imagen_url: p.imagen_url ?? '',
     });
     setProveedores(p.proveedores.map(({ proveedor_id, costo_referencial, es_principal }) => ({
       proveedor_id, costo_referencial: String(costo_referencial), es_principal,
@@ -60,6 +62,7 @@ export default function ProductoForm() {
         sku: form.sku, nombre: form.nombre, margen_utilidad: margen, activo: form.activo,
         requiere_vencimiento: form.requiere_vencimiento, requiere_lote: form.requiere_lote,
         categoria_id: form.categoria_id, condicion_venta_id: form.condicion_venta_id,
+        descripcion: form.descripcion, presentacion: form.presentacion, imagen_url: form.imagen_url,
       };
       let guardado;
       if (editando) guardado = await api.put(`/productos/${id}`, body);
@@ -132,6 +135,30 @@ export default function ProductoForm() {
             <Field label="Precio de venta estimado (IVA incl.)" hint="El precio final lo calcula la base de datos.">
               <input className="form-control" disabled value={money(Number.isFinite(precioEstimado) ? precioEstimado : 0)} />
             </Field>
+          </div>
+        </div>
+        
+        <h3 className="h5">Tienda en línea</h3>
+        <div className="row">
+          <div className="col-md-4">
+            <Field label="Presentación" hint="Por ejemplo: Caja 30 comprimidos, Botella 500 ml.">
+              <input className="form-control" maxLength={100} value={form.presentacion} onChange={set('presentacion')} />
+            </Field>
+          </div>
+          <div className="col-md-8">
+            <Field label="Descripción para la ficha" hint="Se muestra en la tienda. Solo productos de venta directa aparecen en línea.">
+              <textarea className="form-control" rows={3} maxLength={2000} value={form.descripcion} onChange={set('descripcion')} />
+            </Field>
+          </div>
+          <div className="col-md-8">
+            <Field label="Foto (dirección https)" hint="Dirección de una imagen ya publicada, por ejemplo en Supabase Storage. Vacío: la tienda muestra un dibujo.">
+              <input className="form-control" type="url" maxLength={500} placeholder="https://" value={form.imagen_url} onChange={set('imagen_url')} />
+            </Field>
+          </div>
+          <div className="col-md-4">
+            {/^https:\/\/\S+$/.test(form.imagen_url) && (
+              <img src={form.imagen_url} alt="Vista previa de la foto" className="img-thumbnail" style={{ maxHeight: 96 }} />
+            )}
           </div>
         </div>
 
