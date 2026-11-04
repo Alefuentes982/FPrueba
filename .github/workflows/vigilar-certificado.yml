@@ -1,0 +1,26 @@
+# HU-60. Revisa a diario cuántos días le quedan al certificado HTTPS de producción. Con menos de 21 días el workflow
+# falla y GitHub envía un correo de aviso. Usa la variable URL_PROD (la misma de mantener-activo).
+# Los workflows programados solo corren desde la rama por defecto (main).
+name: Vigilar certificado HTTPS
+on:
+  schedule: [{ cron: "41 11 * * *" }]   # 08:41 en Chile (horario de verano)
+  workflow_dispatch:
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Días para el vencimiento
+        env:
+          URL_PROD: ${{ vars.URL_PROD }}
+        run: |
+          host=$(echo "$URL_PROD" | sed -E 's#^https?://##; s#[/:].*$##')
+          if [ -z "$host" ]; then echo "::warning::Falta la variable URL_PROD."; exit 0; fi
+          fin=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          if [ -z "$fin" ]; then echo "::error::No se pudo leer el certificado de $host."; exit 1; fi
+          dias=$(( ( $(date -d "$fin" +%s) - $(date +%s) ) / 86400 ))
+          echo "Certificado de $host: vence el $fin ($dias días)."
+          if [ "$dias" -lt 21 ]; then
+            echo "::error::El certificado de $host vence en $dias días. Renovar según deploy/runbooks/certificado-https.md"
+            exit 1
+          fi
