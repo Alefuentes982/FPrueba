@@ -1,0 +1,49 @@
+# HU-59. Respaldo semanal de la base de producción (Supabase, plan gratuito sin respaldos descargables).
+# pg_dump del esquema public, cifrado con AES-256 y guardado como artefacto del workflow (35 días).
+# El repositorio es público: el archivo SIEMPRE se sube cifrado; sin la clave no se puede abrir.
+# Secretos (Settings > Secrets and variables > Actions):
+#   PROD_DB_URL_RESPALDO  cadena "Session pooler" de farmaclick-prod con el usuario postgres (puerto 5432)
+#   RESPALDO_CLAVE        frase larga para cifrar; guardarla también fuera de GitHub (sin ella no hay restauración)
+# Variable opcional: PG_VERSION_PROD (por defecto 16), igual o mayor que la versión del servidor de Supabase.
+# Los workflows programados solo corren desde la rama por defecto (main).
+name: Respaldo de producción
+on:
+  schedule: [{ cron: "23 7 * * 0" }]   # domingos 04:23 en Chile (horario de verano)
+  workflow_dispatch:
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    env:
+      URL: ${{ secrets.PROD_DB_URL_RESPALDO }}
+      CLAVE: ${{ secrets.RESPALDO_CLAVE }}
+      PG_IMAGEN: postgres:${{ vars.PG_VERSION_PROD || '16' }}
+    steps:
+      - name: Revisar secretos
+        run: |
+          if [ -z "$URL" ] || [ -z "$CLAVE" ]; then
+            echo "::error::Faltan los secretos PROD_DB_URL_RESPALDO o RESPALDO_CLAVE."; exit 1
+          fi
+      - name: pg_dump del esquema public
+        run: |
+          archivo="farmaclick_prod_$(date -u +%Y%m%d).dump"
+          echo "ARCHIVO=$archivo" >> "$GITHUB_ENV"
+          docker run --rm -e URL -v "$PWD":/r "$PG_IMAGEN" pg_dump -Fc --schema=public -f "/r/$archivo" "$URL"
+          ls -lh "$archivo"
+      - name: Comprobar que el respaldo se puede leer
+        run: |
+          docker run --rm -v "$PWD":/r "$PG_IMAGEN" pg_restore -l "/r/$ARCHIVO" > contenido.txt
+          for t in pedido producto lote movimiento_inventario turno_caja; do
+            grep -q "TABLE DATA public $t " contenido.txt || { echo "::error::El respaldo no trae datos de $t."; exit 1; }
+          done
+          echo "Objetos en el respaldo: $(wc -l < contenido.txt)"
+      - name: Cifrar
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$CLAVE" --symmetric --cipher-algo AES256 -o "$ARCHIVO.gpg" "$ARCHIVO"
+          rm -f "$ARCHIVO"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVO }}.gpg
+          path: ${{ env.ARCHIVO }}.gpg
+          retention-days: 35
+          if-no-files-found: error
