@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FARMACIA, FUNCIONES } from './contenido.js';
 import { Migas } from './comunes.jsx';
 import { useDatosTienda } from './DatosTienda.jsx';
+import { prefiereMenosMovimiento } from './ui/movimiento.js';
 
 // Página de ayuda: farmacia y horario, cómo comprar, retiro, medicamentos con receta y pago. Los enlaces de la
 // portada y del pie llegan a cada sección por su ancla (#retiro, #receta...).
@@ -11,7 +12,7 @@ export default function Informacion() {
   const { sucursales } = useDatosTienda();
 
   useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth', block: 'start' });
   }, [hash, sucursales.length]);
 
   return (

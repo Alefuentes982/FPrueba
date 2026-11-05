@@ -5,7 +5,7 @@ Sistema de gestión para farmacias: abastecimiento, inventario, venta presencial
 | Capa | Tecnología | Carpeta |
 |---|---|---|
 | API | Node.js 22 + Express | `backend/` (módulos en `src/modules/`, compartido en `src/core/`) |
-| Web | React + Vite + Bootstrap, servida por Nginx | `frontend/` |
+| Web | React + Vite + Bootstrap, servida por Nginx | `frontend/` (tienda en línea en `src/tienda/`; paneles, modal y avisos en `src/tienda/ui/`) |
 | Base de datos | PostgreSQL 16 (Supabase en dev y prod) | `db/` |
 | Despliegue | Docker, GitHub Actions → GHCR → Oracle Cloud | `.github/workflows/`, `deploy/` |
 

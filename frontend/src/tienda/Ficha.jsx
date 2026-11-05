@@ -3,16 +3,17 @@ import { Link, useParams } from 'react-router-dom';
 import { money } from '../format.js';
 import { tiendaApi } from './apiTienda.js';
 import { FUNCIONES } from './contenido.js';
-import { Aviso, Cargando, EtiquetaDescuento, ImagenProducto, Migas, SelectorCantidad } from './comunes.jsx';
-import { useCarrito } from './CarritoContext.jsx';
-import { MAX_CANTIDAD } from './carrito.js';
+import Comprar from './Comprar.jsx';
+import { Aviso, EtiquetaDescuento, ImagenProducto, Migas } from './comunes.jsx';
 import { enlaceCategoria } from './DatosTienda.jsx';
 import TarjetaProducto from './TarjetaProducto.jsx';
+import { FichaEsqueleto } from './ui/Esqueletos.jsx';
 
 const PESTANAS = ['Descripción', 'Ficha técnica', 'Aviso legal'];
 
 // Ficha del producto: foto, precio con ofertas, compra, disponibilidad por sucursal, pestañas y relacionados.
-// Sin stock se muestra agotado y no se puede agregar al carro.
+// Sin stock se muestra agotado y no se puede agregar al carro. Mientras carga se ve la ficha en esqueleto y cada
+// pestaña entra con un fundido (HU-95).
 export default function Ficha() {
   const { id } = useParams();
   const [producto, setProducto] = useState(null);
@@ -36,7 +37,7 @@ export default function Ficha() {
       </div>
     );
   }
-  if (!producto) return <Cargando />;
+  if (!producto) return <FichaEsqueleto />;
 
   const categoria = { id: producto.categoria_id, nombre: producto.categoria };
   const d = producto.descuento;
@@ -101,12 +102,20 @@ export default function Ficha() {
         </div>
       </div>
 
-      <div className="fct-pestanas" role="tablist">
-        {PESTANAS.map((p) => (
-          <button key={p} type="button" role="tab" aria-selected={pestana === p} className={pestana === p ? 'activa' : ''} onClick={() => setPestana(p)}>{p}</button>
+      <div className="fct-pestanas" role="tablist" aria-label="Información del producto" onKeyDown={(e) => {
+        // Flechas izquierda y derecha cambian de pestaña, como en cualquier lista de pestañas.
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const n = (PESTANAS.indexOf(pestana) + (e.key === 'ArrowRight' ? 1 : -1) + PESTANAS.length) % PESTANAS.length;
+        setPestana(PESTANAS[n]);
+        document.getElementById(`fct-pestana-${n}`)?.focus();
+      }}>
+        {PESTANAS.map((p, i) => (
+          <button key={p} type="button" role="tab" id={`fct-pestana-${i}`} aria-controls="fct-pestana-panel" aria-selected={pestana === p}
+            tabIndex={pestana === p ? 0 : -1} className={pestana === p ? 'activa' : ''} onClick={() => setPestana(p)}>{p}</button>
         ))}
       </div>
-      <div className="fct-pestana" role="tabpanel">
+      <div key={pestana} className="fct-pestana fct-aparecer" role="tabpanel" id="fct-pestana-panel"
+        aria-labelledby={`fct-pestana-${PESTANAS.indexOf(pestana)}`}>
         {pestana === 'Descripción' && (
           producto.descripcion ? <p className="fct-descripcion">{producto.descripcion}</p> : <p className="fct-suave">Este producto aún no tiene descripción.</p>
         )}
@@ -148,38 +157,5 @@ function Relacionados({ producto }) {
       </div>
       <div className="fct-grilla fct-grilla-5">{lista.map((p) => <TarjetaProducto key={p.id} producto={p} />)}</div>
     </section>
-  );
-}
-
-// ---- Compra (HU-70) ----
-
-// Cantidad y botón "Agregar al carro". No deja pasar lo disponible menos lo que ya está en el carro.
-function Comprar({ producto }) {
-  const { agregar, cantidadDe } = useCarrito();
-  const [cantidad, setCantidad] = useState(1);
-  const [aviso, setAviso] = useState(null);
-  const enCarro = cantidadDe(producto.id);
-  const maximo = Math.max(Math.min(producto.disponible, MAX_CANTIDAD) - enCarro, 0);
-
-  const alAgregar = () => {
-    const n = agregar(producto, Math.min(cantidad, maximo));
-    setAviso(n ? `${n === 1 ? 'Agregaste 1 unidad' : `Agregaste ${n} unidades`} al carro.` : 'Ya tienes en el carro todas las unidades disponibles.');
-    setCantidad(1);
-  };
-
-  return (
-    <>
-      <div className="fct-comprar">
-        <SelectorCantidad valor={Math.min(cantidad, Math.max(maximo, 1))} max={Math.max(maximo, 1)} onCambiar={setCantidad} disabled={maximo === 0} />
-        <button type="button" className="fct-btn-agregar" disabled={maximo === 0} onClick={alAgregar}>Agregar al carro</button>
-      </div>
-      {(aviso || enCarro > 0) && (
-        <div className="fct-confirmacion" role="status">
-          <i className="bi bi-check-circle" aria-hidden="true" />
-          <span>{aviso ?? `Tienes ${enCarro} en el carro.`}</span>
-          <Link to="/tienda/carrito">Ver carro</Link>
-        </div>
-      )}
-    </>
   );
 }
