@@ -5,6 +5,8 @@ import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
 import Envase from './Envase.jsx';
 import { tiendaApi } from './apiTienda.js';
 import TarjetaProducto from './TarjetaProducto.jsx';
+import { TarjetaEsqueleto } from './ui/Esqueletos.jsx';
+import { prefiereMenosMovimiento, usePrefiereMenosMovimiento } from './ui/movimiento.js';
 
 // Portada de la tienda (diseño aprobado el 27-10-2026, versión clara). Las secciones siguen el orden de las
 // referencias: banners, accesos rápidos, ofertas, retiro en el día, categorías, bloques por categoría, información de
@@ -39,43 +41,68 @@ export default function Portada() {
   );
 }
 
-// Carrusel principal y dos banners laterales. Avanza solo cada 7 segundos, salvo que el usuario pida menos movimiento.
+// Carrusel principal y dos banners laterales (HU-95). Los tres mensajes están siempre en la página, uno encima de
+// otro, y el activo aparece con un fundido. Avanza solo cada 6 segundos y se detiene mientras el puntero o el foco
+// están encima, si la pestaña no está visible o si la persona pidió reducir el movimiento. En celular se desliza
+// con el dedo.
+const INTERVALO = 6000;
+
 function Banners({ categoriaPorNombre }) {
   const [actual, setActual] = useState(0);
+  const [pausa, setPausa] = useState(false);
+  const reducir = usePrefiereMenosMovimiento();
+  const toque = useRef(null);
   const total = BANNER_PRINCIPAL.length;
   const ir = (n) => setActual((n + total) % total);
 
   useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined;
-    const t = setInterval(() => setActual((n) => (n + 1) % total), 7000);
+    if (reducir || pausa) return undefined;
+    const t = setInterval(() => { if (!document.hidden) setActual((n) => (n + 1) % total); }, INTERVALO);
     return () => clearInterval(t);
-  }, [total, actual]);
+  }, [total, actual, pausa, reducir]);
 
   const destino = (b) => (b.categoria ? enlaceCategoria(categoriaPorNombre(b.categoria)) : b.a);
-  const s = BANNER_PRINCIPAL[actual];
+  const alSoltar = (e) => {
+    if (toque.current == null) return;
+    const dx = e.changedTouches[0].clientX - toque.current;
+    toque.current = null;
+    if (Math.abs(dx) > 40) ir(actual + (dx < 0 ? 1 : -1));
+  };
 
   return (
     <section className="fct-hero">
       <div className="fct-wrap">
-        <div className={`fct-slide fct-tono-${s.tono}`} aria-roledescription="carrusel" aria-label={`Banner ${actual + 1} de ${total}`}>
-          <div className="fct-slide-texto">
-            <span className="fct-slide-etiqueta">{s.etiqueta}</span>
-            <h1>{s.titulo}</h1>
-            <p>{s.texto}</p>
-            <div className="fct-slide-acciones">
-              <Link to={destino(s.boton)} className="fct-btn-verde">{s.boton.texto}</Link>
-              {s.secundario && <Link to={s.secundario.a} className="fct-slide-secundario">{s.secundario.texto}</Link>}
-            </div>
-          </div>
-          <div className="fct-bodegon" aria-hidden="true">
-            <div className="fct-bodegon-disco" />
-            {s.ilustraciones.map((cat, i) => (
-              <div key={`${actual}-${i}`} className={`fct-bodegon-${i + 1}`}><Envase categoria={cat} semillaId={`${actual}-${i}-${cat}`} /></div>
+        <div className="fct-slider" aria-roledescription="carrusel" aria-label="Novedades de la farmacia"
+          onMouseEnter={() => setPausa(true)} onMouseLeave={() => setPausa(false)}
+          onFocus={() => setPausa(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setPausa(false); }}
+          onTouchStart={(e) => { toque.current = e.touches[0].clientX; }} onTouchEnd={alSoltar}>
+          <div className="fct-slides">
+            {BANNER_PRINCIPAL.map((s, i) => (
+              <div key={s.titulo} className={`fct-slide fct-tono-${s.tono}${i === actual ? ' activo' : ''}`}
+                role="group" aria-roledescription="diapositiva" aria-label={`${i + 1} de ${total}`}
+                aria-hidden={i !== actual} inert={i !== actual ? true : undefined}>
+                <div className="fct-slide-texto">
+                  <span className="fct-slide-etiqueta">{s.etiqueta}</span>
+                  {i === 0 ? <h1>{s.titulo}</h1> : <h2 className="fct-slide-titulo">{s.titulo}</h2>}
+                  <p>{s.texto}</p>
+                  <div className="fct-slide-acciones">
+                    <Link to={destino(s.boton)} className="fct-btn-verde">{s.boton.texto}</Link>
+                    {s.secundario && <Link to={s.secundario.a} className="fct-slide-secundario">{s.secundario.texto}</Link>}
+                  </div>
+                </div>
+                <div className="fct-bodegon" aria-hidden="true">
+                  <div className="fct-bodegon-disco" />
+                  {s.ilustraciones.map((cat, j) => (
+                    <div key={`${i}-${j}`} className={`fct-bodegon-${j + 1}`}><Envase categoria={cat} semillaId={`${i}-${j}-${cat}`} /></div>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
           <div className="fct-puntos">
             {BANNER_PRINCIPAL.map((b, i) => (
-              <button key={b.titulo} type="button" className={i === actual ? 'activo' : ''} aria-label={`Ver banner ${i + 1}`} onClick={() => ir(i)} />
+              <button key={b.titulo} type="button" className={i === actual ? 'activo' : ''} aria-label={`Ver banner ${i + 1}`}
+                aria-current={i === actual ? 'true' : undefined} onClick={() => ir(i)} />
             ))}
           </div>
           <button type="button" className="fct-flecha fct-flecha-izq" aria-label="Banner anterior" onClick={() => ir(actual - 1)}><i className="bi bi-chevron-left" /></button>
@@ -190,20 +217,21 @@ function Beneficios() {
 // ---- Secciones con productos (HU-66) ----
 
 // Carrusel de productos con descuento, de mayor a menor porcentaje. Sin ofertas vigentes, la sección no aparece.
+// Como la sección puede no existir (sin ofertas vigentes), no muestra tarjetas de carga: aparece cuando llegan.
 function OfertasDestacadas() {
-  const [productos, setProductos] = useState([]);
+  const [productos, setProductos] = useState(null);
   const pista = useRef(null);
   useEffect(() => {
     tiendaApi.productos({ con_descuento: 1, orden: 'descuento', limit: 10 }).then((r) => setProductos(r.data)).catch(() => setProductos([]));
   }, []);
-  if (productos.length === 0) return null;
-  const mover = (dir) => pista.current?.scrollBy({ left: dir * pista.current.clientWidth * 0.8, behavior: 'smooth' });
+  if (!productos || productos.length === 0) return null;
+  const mover = (dir) => pista.current?.scrollBy({ left: dir * pista.current.clientWidth * 0.8, behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth' });
   return (
     <section className="fct-seccion">
       <div className="fct-wrap">
         <div className="fct-titulo-seccion"><h2>Ofertas destacadas</h2><Link to="/tienda/productos?ofertas=1">Ver todas las ofertas</Link></div>
         <div className="fct-carrusel">
-          <div className="fct-carrusel-pista" ref={pista}>
+          <div className="fct-carrusel-pista fct-aparecer" ref={pista}>
             {productos.map((p) => <TarjetaProducto key={p.id} producto={p} />)}
           </div>
           <button type="button" className="fct-flecha fct-flecha-izq" aria-label="Ver anteriores" onClick={() => mover(-1)}><i className="bi bi-chevron-left" /></button>
@@ -223,11 +251,11 @@ function BloquesCategoria({ categoriaPorNombre }) {
 }
 
 function BloqueCategoria({ bloque, categoria }) {
-  const [productos, setProductos] = useState([]);
+  const [productos, setProductos] = useState(null);
   useEffect(() => {
     tiendaApi.productos({ categoria_id: categoria.id, limit: 4 }).then((r) => setProductos(r.data)).catch(() => setProductos([]));
   }, [categoria.id]);
-  if (productos.length === 0) return null;
+  if (productos?.length === 0) return null;
   return (
     <section className="fct-seccion">
       <div className="fct-wrap">
@@ -238,7 +266,9 @@ function BloqueCategoria({ bloque, categoria }) {
             <div className="fct-bloque-dibujo" aria-hidden="true"><Envase categoria={categoria.nombre} semillaId={bloque.titulo} /></div>
             <span>Ir a la categoría</span>
           </Link>
-          {productos.map((p) => <TarjetaProducto key={p.id} producto={p} />)}
+          {productos
+            ? productos.map((p) => <TarjetaProducto key={p.id} producto={p} />)
+            : Array.from({ length: 4 }, (_, i) => <TarjetaEsqueleto key={i} />)}
         </div>
       </div>
     </section>

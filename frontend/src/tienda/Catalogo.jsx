@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { money } from '../format.js';
 import { tiendaApi } from './apiTienda.js';
-import { Aviso, Cargando, Migas } from './comunes.jsx';
+import { Aviso, Migas } from './comunes.jsx';
 import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
 import TarjetaProducto from './TarjetaProducto.jsx';
+import { GrillaEsqueleto } from './ui/Esqueletos.jsx';
+import PanelLateral from './ui/PanelLateral.jsx';
+import { prefiereMenosMovimiento } from './ui/movimiento.js';
 
 const ORDENES = [
   { valor: 'relevancia', texto: 'Más vendidos' },
@@ -18,6 +21,7 @@ const entero = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && 
 
 // Listado de productos: búsqueda (viene de la cabecera en ?q=), categoría, ofertas, rango de precio, orden y páginas.
 // Los filtros viven en la URL para que se puedan compartir y el botón Atrás funcione.
+// En celular los filtros se abren en un panel lateral; mientras llegan los productos se ven tarjetas de carga (HU-95).
 export default function Catalogo() {
   const [params, setParams] = useSearchParams();
   const { categorias, sucursales } = useDatosTienda();
@@ -31,28 +35,31 @@ export default function Catalogo() {
 
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
+  const [cargando, setCargando] = useState(true);
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
 
   useEffect(() => {
     let vigente = true;
     setError(null);
+    setCargando(true);
     tiendaApi.productos({
       q, categoria_id: categoriaId, con_descuento: ofertas ? 1 : '', precio_min: desde ?? '', precio_max: hasta ?? '',
       orden, page: pagina, limit: POR_PAGINA,
     })
       .then((r) => vigente && setResultado(r))
-      .catch((e) => vigente && (setError(e), setResultado(null)));
+      .catch((e) => vigente && (setError(e), setResultado(null)))
+      .finally(() => vigente && setCargando(false));
     return () => { vigente = false; };
   }, [q, categoriaId, ofertas, desde, hasta, orden, pagina]);
 
-  // Cambiar un filtro vuelve a la primera página.
+  // Cambiar un filtro vuelve a la primera página. En celular el panel de filtros sigue abierto: el botón de abajo
+  // muestra cuántos productos quedan y lo cierra.
   const fijar = (cambios) => {
     const p = new URLSearchParams(params);
     Object.entries(cambios).forEach(([k, v]) => (v === '' || v == null ? p.delete(k) : p.set(k, v)));
     if (!('pagina' in cambios)) p.delete('pagina');
     setParams(p);
-    setFiltrosAbiertos(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: prefiereMenosMovimiento() ? 'auto' : 'smooth' });
   };
 
   const categoria = categorias.find((c) => c.id === categoriaId);
@@ -85,28 +92,13 @@ export default function Catalogo() {
       </div>
 
       <div className="fct-listado">
-        <aside className={`fct-filtros${filtrosAbiertos ? ' abierto' : ''}`} aria-label="Filtros">
-          <div className="fct-filtros-titulo fct-solo-movil">
-            <b>Filtrar</b>
-            <button type="button" aria-label="Cerrar filtros" onClick={() => setFiltrosAbiertos(false)}><i className="bi bi-x-lg" /></button>
-          </div>
-          <div className="fct-filtro">
-            <h2>Ofertas</h2>
-            <label className="fct-check">
-              <input type="checkbox" checked={ofertas} onChange={(e) => fijar({ ofertas: e.target.checked ? '1' : '' })} />
-              Con descuento
-            </label>
-          </div>
-          <FiltroPrecio desde={desde} hasta={hasta} onAplicar={(d, h) => fijar({ desde: d, hasta: h })} />
-          <div className="fct-filtro fct-filtro-nota">
-            <h2>Retiro</h2>
-            <p><i className="bi bi-shop" aria-hidden="true" />Todo lo que ves tiene stock hoy {matriz ? `en ${matriz.nombre}` : 'en la farmacia'}.</p>
-          </div>
+        <aside className="fct-filtros" aria-label="Filtros">
+          <Filtros ofertas={ofertas} desde={desde} hasta={hasta} matriz={matriz} fijar={fijar} />
         </aside>
 
         <section>
           <div className="fct-filtros-movil fct-solo-movil">
-            <button type="button" onClick={() => setFiltrosAbiertos(true)}>
+            <button type="button" aria-haspopup="dialog" onClick={() => setFiltrosAbiertos(true)}>
               <i className="bi bi-sliders" aria-hidden="true" />Filtrar{activos.length > 0 && ` (${activos.length})`}
             </button>
             <SelectorOrden orden={orden} onCambiar={(v) => fijar({ orden: v === 'relevancia' ? '' : v })} />
@@ -124,13 +116,13 @@ export default function Catalogo() {
           )}
 
           {error && <Aviso error={error} />}
-          {!error && !resultado && <Cargando />}
+          {!error && !resultado && <GrillaEsqueleto cantidad={8} />}
           {resultado && resultado.data.length === 0 && (
             <Aviso>No encontramos productos con esos filtros. Prueba con otra palabra o revisa todas las categorías.</Aviso>
           )}
           {resultado && resultado.data.length > 0 && (
             <>
-              <div className="fct-grilla">
+              <div className={`fct-grilla${cargando ? ' fct-actualizando' : ''}`} aria-busy={cargando}>
                 {resultado.data.map((p) => <TarjetaProducto key={p.id} producto={p} />)}
               </div>
               <Paginacion pagina={pagina} paginas={resultado.paginas} onIr={(n) => fijar({ pagina: n > 1 ? String(n) : '' })} />
@@ -138,7 +130,36 @@ export default function Catalogo() {
           )}
         </section>
       </div>
+
+      <PanelLateral abierto={filtrosAbiertos} onCerrar={() => setFiltrosAbiertos(false)} titulo="Filtrar" lado="end" id="fct-panel-filtros"
+        pie={(
+          <button type="button" className="fct-btn-primario w-100" onClick={() => setFiltrosAbiertos(false)}>
+            {resultado ? `Ver ${resultado.total} ${resultado.total === 1 ? 'producto' : 'productos'}` : 'Ver productos'}
+          </button>
+        )}>
+        <Filtros ofertas={ofertas} desde={desde} hasta={hasta} matriz={matriz} fijar={fijar} />
+      </PanelLateral>
     </div>
+  );
+}
+
+// Bloques de filtros. Se usan en la columna de escritorio y en el panel lateral de celular.
+function Filtros({ ofertas, desde, hasta, matriz, fijar }) {
+  return (
+    <>
+      <div className="fct-filtro">
+        <h2>Ofertas</h2>
+        <label className="fct-check">
+          <input type="checkbox" checked={ofertas} onChange={(e) => fijar({ ofertas: e.target.checked ? '1' : '' })} />
+          Con descuento
+        </label>
+      </div>
+      <FiltroPrecio desde={desde} hasta={hasta} onAplicar={(d, h) => fijar({ desde: d, hasta: h })} />
+      <div className="fct-filtro fct-filtro-nota">
+        <h2>Retiro</h2>
+        <p><i className="bi bi-shop" aria-hidden="true" />Todo lo que ves tiene stock hoy {matriz ? `en ${matriz.nombre}` : 'en la farmacia'}.</p>
+      </div>
+    </>
   );
 }
 
