@@ -79,12 +79,6 @@
 .fct-menu a:hover, .fct-menu a.activa { background: rgba(255, 255, 255, 0.16); }
 .fct-menu .fct-menu-ofertas { background: var(--v); color: var(--tinta); }
 .fct-menu .fct-menu-ofertas:hover, .fct-menu .fct-menu-ofertas.activa { background: #b3d65a; }
-.fct-panel-categorias { background: #fff; border-bottom: 1px solid var(--linea); box-shadow: 0 12px 24px rgba(16, 24, 40, 0.08); position: relative; z-index: 5; }
-.fct-panel-grilla { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 16px 0 20px; }
-.fct-panel-grilla a { padding: 12px 14px; border-radius: 10px; background: var(--fondo); font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
-.fct-panel-grilla a i { color: var(--to); }
-.fct-panel-grilla a:hover { background: #E7F4F4; color: var(--to); }
-.fct-panel-grilla small { font-weight: 400; color: var(--gris); font-size: 12.5px; }
 
 /* Secciones */
 .fct-seccion { padding: 36px 0; }
@@ -110,9 +104,9 @@
 .fct-precio-final small { font-size: 12px; font-weight: 700; color: var(--rojo); }
 
 /* Tarjeta de producto */
-.fct-card { border: 1px solid var(--linea); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; background: #fff; min-width: 0; transition: box-shadow .15s; }
-.fct-card:hover { box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08); }
+.fct-card { border: 1px solid var(--linea); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 6px; background: #fff; min-width: 0; }
 .fct-card-enlace { display: flex; flex-direction: column; gap: 6px; }
+.fct-card-foto-enlace { position: absolute; inset: 0; display: block; }
 .fct-card-foto { position: relative; background: var(--fondo); border-radius: 10px; aspect-ratio: 1 / 1; margin-bottom: 6px; overflow: hidden; }
 .fct-card-categoria { font-size: 12px; color: var(--gris); }
 .fct-card h3 { font-size: 14px; font-weight: 600; line-height: 1.3; min-height: 36px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -159,14 +153,16 @@
 /* ---------- Portada ---------- */
 .fct-hero { padding: 24px 0 8px; }
 .fct-hero > .fct-wrap:first-child { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.fct-slider { position: relative; border-radius: 20px; overflow: hidden; min-width: 0; }
+.fct-slides { display: grid; }
 .fct-slide {
-  position: relative; border-radius: 20px; overflow: hidden; color: #fff; min-height: 380px; display: grid;
+  grid-area: 1 / 1; color: #fff; min-height: 380px; display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: center; padding: 40px 72px 52px;
 }
 .fct-slide.fct-tono-turquesa { background: linear-gradient(120deg, var(--to), var(--t) 60%, #6CC3C2); }
 .fct-slide.fct-tono-morado { background: linear-gradient(120deg, var(--mo), var(--m) 55%, #8E2FB8); }
 .fct-slide.fct-tono-verde { background: linear-gradient(120deg, #3E5A0A, var(--vo) 60%, #7FA32A); }
-.fct-slide h1 { color: #fff; font-size: 40px; line-height: 1.07; margin-bottom: 12px; }
+.fct-slide h1, .fct-slide .fct-slide-titulo { color: #fff; font-size: 40px; line-height: 1.07; margin-bottom: 12px; }
 .fct-slide p { font-size: 16px; opacity: 0.92; max-width: 420px; margin-bottom: 22px; }
 .fct-slide-etiqueta { display: inline-flex; background: rgba(255, 255, 255, 0.16); border-radius: 99px; padding: 5px 12px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
 .fct-slide-acciones { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -290,8 +286,6 @@
 .fct-paginas-salto { color: var(--gris); }
 .fct-filtros-movil { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .fct-filtros-movil > button { border: 1.5px solid var(--linea); border-radius: 10px; background: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.fct-filtros-titulo { justify-content: space-between; align-items: center; padding-bottom: 12px; }
-.fct-filtros-titulo button { border: 0; background: none; font-size: 18px; }
 
 /* ---------- Ficha ---------- */
 .fct-ficha { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; padding: 14px 0 30px; }
@@ -404,6 +398,116 @@
 .fct-pie-pagos b { background: #fff; color: #C8102E; border-radius: 4px; padding: 2px 6px; margin: 0 3px; }
 .fct-pie-copy { font-size: 12px; margin-top: 8px; opacity: 0.7; }
 
+/* ---------- Movimiento e interacciones (HU-95) ----------
+   React decide cuándo se agrega o se quita .show; Bootstrap 5.3 y estas reglas dibujan la transición.
+   Duraciones entre 150 y 300 ms (el banner, 500 ms). Con "reducir movimiento" todo queda instantáneo (final del archivo). */
+.fct :where(a, button) { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .15s ease; }
+.fct-btn-primario, .fct-btn-agregar, .fct-btn-verde { transition: background-color .15s ease, transform .1s ease; }
+.fct-btn-primario:active:not(:disabled), .fct-btn-agregar:active:not(:disabled), .fct-btn-verde:active { transform: scale(0.98); }
+.fct-actualizando { transition: opacity .15s ease; }
+
+@keyframes fct-aparecer { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fct-aparecer { animation: fct-aparecer .25s ease-out both; }
+
+/* Tarjetas: se elevan y la foto se acerca (solo con mouse) */
+@media (hover: hover) {
+  .fct-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+  .fct-card:not(.fct-esqueleto):hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(16, 24, 40, 0.10); border-color: #D3E8E8; }
+  .fct-card .fct-imagen > * { transition: transform .3s ease; }
+  .fct-card:hover .fct-imagen > * { transform: scale(1.05); }
+}
+.fct-card-rapida {
+  position: absolute; left: 50%; bottom: 10px; z-index: 2; transform: translate(-50%, 6px); opacity: 0;
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; padding: 7px 14px; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.96); color: var(--tinta); font-weight: 600; font-size: 13px; box-shadow: 0 4px 14px rgba(16, 24, 40, 0.16);
+  transition: opacity .2s ease, transform .2s ease, color .15s ease;
+}
+.fct-card:hover .fct-card-rapida, .fct-card-rapida:focus-visible { opacity: 1; transform: translate(-50%, 0); }
+.fct-card-rapida:hover { color: var(--to); }
+@media (hover: none) { .fct-card-rapida { display: none; } }
+
+/* Contador del carro */
+@keyframes fct-salto { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.fct-carro > b.fct-salto { animation: fct-salto .4s ease; }
+
+/* Banner: los mensajes van uno encima de otro y el activo aparece con un fundido */
+.fct-slide { opacity: 0; visibility: hidden; transition: opacity .5s ease, visibility 0s linear .5s; }
+.fct-slide.activo { opacity: 1; visibility: visible; transition: opacity .5s ease; }
+.fct-slide .fct-slide-texto, .fct-slide .fct-bodegon { transform: translateY(12px); transition: transform .5s ease; }
+.fct-slide.activo .fct-slide-texto, .fct-slide.activo .fct-bodegon { transform: none; }
+
+/* Pestañas de la ficha */
+.fct-pestanas button { transition: color .15s ease, border-color .2s ease; }
+
+/* Fondo oscuro de paneles y modales */
+.fct-capas .offcanvas-backdrop, .fct-capas .modal-backdrop { background-color: #0F1520; }
+.fct-capas .offcanvas-backdrop.show, .fct-capas .modal-backdrop.show { opacity: 0.45; }
+
+/* Panel lateral (categorías y filtros) */
+.fct-panel { --bs-offcanvas-width: min(380px, 88vw); --bs-offcanvas-transition: transform .3s ease; color: var(--tinta); }
+.fct-panel .offcanvas-header { border-bottom: 1px solid var(--linea); padding: 16px 20px; }
+.fct-panel .offcanvas-title { font-size: 19px; font-weight: 700; }
+.fct-panel .offcanvas-body { padding: 10px 12px 20px; }
+.fct-panel-lista { display: flex; flex-direction: column; gap: 2px; }
+.fct-panel-lista a { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-radius: 10px; font-weight: 600; }
+.fct-panel-lista a > span { flex: 1; display: flex; flex-direction: column; }
+.fct-panel-lista small { font-weight: 400; color: var(--gris); font-size: 12.5px; }
+.fct-panel-lista a > .bi-chevron-right { color: var(--gris); font-size: 13px; transition: transform .15s ease, color .15s ease; }
+.fct-panel-lista a:hover { background: #E7F4F4; color: var(--to); }
+.fct-panel-lista a:hover > .bi-chevron-right { transform: translateX(3px); color: var(--to); }
+.fct-panel-lista .fct-panel-ofertas { background: var(--v); margin-bottom: 6px; }
+.fct-panel-lista .fct-panel-ofertas:hover { background: #b3d65a; color: var(--tinta); }
+.fct-panel-ayuda { border-top: 1px solid var(--linea); margin-top: 12px; padding: 14px 10px 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; color: var(--gris); }
+.fct-panel-ayuda > * { display: flex; gap: 8px; align-items: center; }
+.fct-panel-ayuda a { color: var(--to); font-weight: 600; }
+.fct-panel-pie { border-top: 1px solid var(--linea); padding: 14px 16px; }
+.fct-panel-pie .fct-btn-primario { height: 48px; }
+.fct-panel .fct-filtro:first-child { padding-top: 6px; }
+
+/* Modal (vista rápida) */
+.fct-modal .modal-content { border: 0; border-radius: 20px; box-shadow: 0 24px 60px rgba(16, 24, 40, 0.25); }
+.fct-modal .modal-header { border: 0; padding: 12px 14px 0; justify-content: flex-end; }
+.fct-modal .modal-body { padding: 4px 28px 28px; }
+.fct-rapida { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.fct-rapida-foto { position: relative; background: var(--fondo); border-radius: 16px; aspect-ratio: 1 / 1; overflow: hidden; align-self: start; }
+.fct-rapida-foto .fct-imagen-dibujo { width: 52%; height: 62%; }
+.fct-rapida-info { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.fct-rapida-info h3 { font-size: 22px; line-height: 1.2; }
+.fct-precio-grande .fct-precio-final { font-size: 30px; }
+.fct-rapida-descripcion { font-size: 14px; width: 100%; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.fct-rapida-info .fct-comprar { width: 100%; }
+.fct-rapida-info .fct-escala { margin-top: 0; width: 100%; }
+.fct-rapida-ficha { font-weight: 700; color: var(--to) !important; display: inline-flex; gap: 6px; align-items: center; margin-top: 4px; }
+.fct-rapida-ficha i { transition: transform .15s ease; }
+.fct-rapida-ficha:hover i { transform: translateX(3px); }
+
+/* Avisos flotantes */
+.fct-avisos { z-index: 1090; }
+.fct-aviso-flotante { width: min(380px, calc(100vw - 32px)); border: 0; border-radius: 14px; background: #fff; box-shadow: 0 12px 32px rgba(16, 24, 40, 0.18); font-size: 14px; }
+.fct-aviso-flotante.fade { transition: opacity .2s ease, transform .2s ease; }
+.fct-aviso-flotante.showing { transform: translateY(10px); }
+.fct-aviso-flotante-cuerpo { display: flex; gap: 12px; align-items: center; padding: 12px 12px 12px 14px; border-left: 4px solid var(--v); border-radius: 14px; }
+.fct-aviso-flotante-cuerpo > .bi { color: var(--vo); font-size: 22px; }
+.fct-aviso-foto { width: 48px; height: 48px; flex: none; background: var(--fondo); border-radius: 10px; overflow: hidden; }
+.fct-aviso-foto .fct-imagen-dibujo { width: 70%; height: 80%; }
+.fct-aviso-flotante-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.fct-aviso-flotante-texto span { color: var(--gris); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fct-aviso-flotante-texto a { color: var(--to); font-weight: 700; text-decoration: underline; font-size: 13.5px; align-self: flex-start; }
+.fct-aviso-flotante .btn-close { align-self: flex-start; font-size: 11px; }
+
+/* Tarjetas de carga */
+.fct-esqueleto { color: #D5DAE2; pointer-events: none; }
+.fct-esqueleto .placeholder, .placeholder-glow .fct-ficha-foto.placeholder { opacity: 1; border-radius: 6px; cursor: default; }
+.fct-esqueleto .fct-card-foto.placeholder { display: block; border-radius: 10px; }
+.fct-esqueleto-precio { min-height: 1.4em !important; margin-top: auto; }
+.fct-esqueleto-boton { min-height: 42px !important; border-radius: 10px !important; margin-top: 6px; }
+.fct-ficha.placeholder-glow { color: #D5DAE2; }
+.fct-ficha-foto.placeholder { display: block; border-radius: 20px !important; }
+.fct-esqueleto-info { display: flex; flex-direction: column; gap: 12px; }
+.fct-esqueleto-info .placeholder { opacity: 1; border-radius: 6px; }
+.fct-esqueleto-bloque { min-height: 120px !important; border-radius: 16px !important; }
+.fct-esqueleto-caja { min-height: 70px !important; border-radius: 14px !important; }
+
 /* ---------- Tablet ---------- */
 @media (max-width: 1100px) {
   .fct-rapidos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -438,7 +542,6 @@
   .fct-buscador { order: 5; flex-basis: 100%; height: 44px; }
   .fct-buscador button { display: none; }
   .fct-menu .fct-wrap { min-height: 44px; }
-  .fct-panel-grilla { grid-template-columns: 1fr 1fr; }
 
   .fct-seccion { padding: 26px 0; }
   .fct-titulo-seccion h2 { font-size: 21px; }
@@ -446,11 +549,11 @@
 
   .fct-hero > .fct-wrap:first-child { grid-template-columns: 1fr; }
   .fct-slide { grid-template-columns: 1fr; padding: 26px 22px 48px; min-height: 0; }
-  .fct-slide h1 { font-size: 29px; }
+  .fct-slide h1, .fct-slide .fct-slide-titulo { font-size: 29px; }
   .fct-slide p { font-size: 14.5px; }
   .fct-bodegon { zoom: 0.55; width: 360px; margin: 6px auto 0; }
   .fct-puntos { left: 22px; }
-  .fct-slide .fct-flecha { display: none; }
+  .fct-slider .fct-flecha { display: none; }
   .fct-laterales { grid-template-rows: none; grid-template-columns: 1fr 1fr; gap: 10px; }
   .fct-lateral { padding: 16px; min-height: 150px; justify-content: flex-start; }
   .fct-lateral h2 { font-size: 16px; max-width: 100%; }
@@ -488,7 +591,6 @@
   .fct-chips { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; }
   .fct-listado { grid-template-columns: 1fr; padding-top: 14px; }
   .fct-filtros { display: none; }
-  .fct-filtros.abierto { display: block; position: fixed; inset: 0; z-index: 50; background: #fff; padding: 18px 16px; overflow-y: auto; }
   .fct-filtros-movil .fct-select { width: 100%; }
 
   .fct-ficha { grid-template-columns: 1fr; gap: 18px; }
@@ -512,4 +614,19 @@
   .fct-pie-columnas { grid-template-columns: 1fr 1fr; }
   .fct-pie-columnas > div:first-child { grid-column: 1 / -1; }
   .fct-pie-base { flex-direction: column; }
+
+  .fct-rapida { grid-template-columns: 1fr; gap: 16px; }
+  .fct-rapida-foto { max-width: 260px; width: 100%; margin: 0 auto; }
+  .fct-modal .modal-body { padding: 4px 18px 22px; }
+  .fct-avisos { left: 0; right: 0; padding: 12px !important; }
+  .fct-aviso-flotante { width: 100%; }
+}
+
+/* ---------- Reducir movimiento (HU-95) ----------
+   Si la persona activó "reducir movimiento" en su sistema, nada se desliza ni se anima: todo aparece al instante. */
+@media (prefers-reduced-motion: reduce) {
+  .fct *, .fct *::before, .fct *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important;
+  }
 }

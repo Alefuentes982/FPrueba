@@ -1,4 +1,4 @@
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { CarritoProvider } from './CarritoContext.jsx';
 import Carrito from './Carrito.jsx';
 import Catalogo from './Catalogo.jsx';
@@ -8,28 +8,38 @@ import Ficha from './Ficha.jsx';
 import Informacion from './Informacion.jsx';
 import Pie from './Pie.jsx';
 import Portada from './Portada.jsx';
+import { NotificacionesProvider, ZonaNotificaciones } from './ui/Notificaciones.jsx';
 import './tienda.css';
 
 // Tienda en línea: rutas públicas /tienda/*, sin sesión y con diseño propio (aprobado el 27-10-2026, versión clara).
 // Comparte la API y la base con el sistema del personal, pero solo usa los endpoints públicos /api/tienda.
+// Cada página entra con un fundido corto (HU-95). Los paneles, modales y avisos se dibujan en .fct-capas.
 export default function TiendaApp() {
+  const { pathname } = useLocation();
   return (
     <DatosTiendaProvider>
       <CarritoProvider>
-        <div className="fct">
-          <Encabezado />
-          <main className="fct-contenido">
-            <Routes>
-              <Route index element={<Portada />} />
-              <Route path="productos" element={<Catalogo />} />
-              <Route path="producto/:id" element={<Ficha />} />
-              <Route path="carrito" element={<Carrito />} />
-              <Route path="informacion" element={<Informacion />} />
-              <Route path="*" element={<NoEncontrada />} />
-            </Routes>
-          </main>
-          <Pie />
-        </div>
+        <NotificacionesProvider>
+          <div className="fct">
+            <Encabezado />
+            <main className="fct-contenido">
+              <div key={pathname} className="fct-aparecer">
+                <Routes>
+                  <Route index element={<Portada />} />
+                  <Route path="productos" element={<Catalogo />} />
+                  <Route path="producto/:id" element={<Ficha />} />
+                  <Route path="carrito" element={<Carrito />} />
+                  <Route path="informacion" element={<Informacion />} />
+                  <Route path="*" element={<NoEncontrada />} />
+                </Routes>
+              </div>
+            </main>
+            <Pie />
+            <div className="fct-capas">
+              <ZonaNotificaciones />
+            </div>
+          </div>
+        </NotificacionesProvider>
       </CarritoProvider>
     </DatosTiendaProvider>
   );
