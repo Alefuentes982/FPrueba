@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { pool } from '../../core/db.js';
 import { uuid } from '../../core/sql.js';
 import { carritoSchema, filtrosCatalogo } from './esquemas.js';
-import { cotizarCarrito, fichaProducto, listarCategorias, listarProductos, sucursalesWeb } from './servicio.js';
+import { cotizarCarrito, fichaProducto, listarCategorias, listarComunas, listarProductos, sucursalesWeb } from './servicio.js';
 
 // API pública de la tienda: sin token, solo lectura y con límite de solicitudes por IP.
 // La cotización del carrito es POST porque lleva el contenido del carrito, pero tampoco guarda nada.
@@ -19,6 +19,10 @@ r.use(rateLimit({
 
 r.get('/sucursales', async (_req, res) => {
   res.json(await sucursalesWeb(pool));
+});
+
+r.get('/comunas', async (_req, res) => {
+  res.json(await listarComunas(pool));
 });
 
 r.get('/categorias', async (_req, res) => {

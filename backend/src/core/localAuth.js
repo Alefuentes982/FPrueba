@@ -56,6 +56,28 @@ const auth = {
     return p ? { data: { user: { id: p.sub } }, error: null } : fallo('Invalid token');
   },
 
+  // Registro de clientes de la tienda. En local no se envía correo: la cuenta queda confirmada de inmediato.
+  async signUp({ email, password }) {
+    const r = await auth.admin.createUser({ email, password });
+    if (r.error) return r;
+    console.log(`[auth local] Cuenta ${email} creada y confirmada (en local no se envía correo de confirmación).`);
+    return { data: { user: r.data.user, session: sesion(r.data.user.id) }, error: null };
+  },
+
+  async resend() {
+    return { data: {}, error: null };
+  },
+
+  // Recuperar contraseña: en local el enlace se escribe en el log de la API (docker compose logs api).
+  async resetPasswordForEmail(email, { redirectTo } = {}) {
+    const { rows } = await pool.query('SELECT usuario_id FROM dev_credencial WHERE correo = $1', [email]);
+    if (rows[0]) {
+      const token = firmar(rows[0].usuario_id, 'access', 60 * 60);
+      console.log(`[auth local] Enlace para crear una nueva contraseña de ${email}: ${redirectTo}#access_token=${token}&type=recovery`);
+    }
+    return { data: {}, error: null };
+  },
+
   admin: {
     async createUser({ email, password }) {
       const id = crypto.randomUUID();

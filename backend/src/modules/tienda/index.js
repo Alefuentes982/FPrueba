@@ -1,5 +1,14 @@
 import routes from './routes.js';
+import cuenta from './cuenta.js';
 
-// Tienda en línea (pública): catálogo, ficha y cotización del carrito. No exige sesión ni permisos y no expone
-// costos ni márgenes. Los módulos del personal siguen protegidos por autenticar y exigeModulo.
-export default { nombre: 'tienda', publico: true, rutas: [{ ruta: '/api/tienda', router: routes }] };
+// Tienda en línea (pública): catálogo, ficha y cotización del carrito, sin sesión ni permisos y sin costos ni márgenes.
+// La cuenta de cliente (HU-68) tiene su propia sesión (sesionCliente.js): un cliente nunca entra a los módulos del
+// personal, que siguen protegidos por autenticar y exigeModulo.
+export default {
+  nombre: 'tienda',
+  publico: true,
+  rutas: [
+    { ruta: '/api/tienda/cuenta', router: cuenta },
+    { ruta: '/api/tienda', router: routes },
+  ],
+};

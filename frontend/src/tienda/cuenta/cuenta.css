@@ -1,0 +1,40 @@
+/* Cuenta de cliente (HU-68) y formularios de la tienda (también los usa el checkout, HU-71). Todo bajo .fct. */
+.fct-cuenta-caja { max-width: 460px; margin: 24px auto 0; border: 1px solid var(--linea); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 12px; }
+.fct-cuenta-ancha { max-width: 720px; }
+.fct-cuenta-caja h1 { font-size: 26px; }
+.fct-cuenta-caja.fct-vacio { padding: 36px 28px; }
+.fct-form { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.fct-form-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.fct-form-2 .fct-ancho { grid-column: 1 / -1; }
+.fct-form-fin { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+.fct-campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.fct-campo > label { font-weight: 600; font-size: 14px; }
+.fct-campo input, .fct-campo select, .fct-clave {
+  height: 46px; border: 1.5px solid var(--linea); border-radius: 10px; padding: 0 14px; background: #fff; width: 100%; min-width: 0;
+}
+.fct-campo input:focus, .fct-campo select:focus { border-color: var(--t); outline: none; box-shadow: 0 0 0 3px rgba(75, 172, 171, 0.25); }
+.fct-campo select:disabled { background: var(--fondo); color: var(--gris); }
+.fct-clave { display: flex; align-items: center; padding: 0 4px 0 0; }
+.fct-clave:focus-within { border-color: var(--t); box-shadow: 0 0 0 3px rgba(75, 172, 171, 0.25); }
+.fct-campo .fct-clave input { border: 0; height: 100%; box-shadow: none; }
+.fct-clave button { border: 0; background: none; width: 40px; height: 38px; border-radius: 8px; color: var(--gris); }
+.fct-clave button:hover { color: var(--to); background: var(--fondo); }
+.fct-campo-ayuda { color: var(--gris); font-size: 12.5px; }
+.fct-campo-mensaje { color: var(--rojo); font-size: 12.5px; font-weight: 600; }
+.fct-campo-error input, .fct-campo-error select, .fct-campo-error .fct-clave { border-color: var(--rojo); }
+.fct-olvide { align-self: flex-start; font-size: 13.5px; color: var(--to) !important; text-decoration: underline !important; }
+.fct-form .fct-btn-primario { height: 50px; font-size: 16px; }
+.fct-cuenta-pie { border-top: 1px solid var(--linea); margin-top: 6px; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fct-exito { display: flex; gap: 10px; align-items: flex-start; background: #EEF7E2; border: 1px solid #CFE5AE; color: #2F4708; border-radius: 12px; padding: 12px 14px; font-size: 14px; }
+.fct-exito i { font-size: 18px; color: var(--vo); }
+.fct-datos { margin: 6px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+.fct-datos div { border-bottom: 1px solid var(--linea); padding-bottom: 10px; }
+.fct-datos dt { font-size: 12.5px; color: var(--gris); font-weight: 500; }
+.fct-datos dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.fct-cuenta-acciones { display: flex; gap: 12px; flex-wrap: wrap; }
+.fct-cuenta-con-sesion small { color: var(--to) !important; }
+
+@media (max-width: 760px) {
+  .fct-cuenta-caja { margin-top: 12px; padding: 20px 16px; border: 0; }
+  .fct-form-2, .fct-datos { grid-template-columns: 1fr; }
+}
