@@ -44,8 +44,8 @@ export default function PedidoDetalle() {
   const siguientes = p.acciones.filter((a) => a.startsWith('estado:')).map((a) => a.slice(7));
   const tiene = (a) => p.acciones.includes(a);
 
-  const confirmarPago = (pagos) => ejecutar(
-    () => api.post(`/pedidos/${id}/pagos`, { pagos }),
+  const confirmarPago = (pagos, { recibido }) => ejecutar(
+    () => api.post(`/pedidos/${id}/pagos`, { pagos, efectivo_recibido: recibido }),
     `Pago registrado. El pedido ${p.codigo} quedó pagado.`);
 
   return (
@@ -153,7 +153,9 @@ export default function PedidoDetalle() {
               <tbody>
                 {p.pagos.map((x) => (
                   <tr key={x.id}>
-                    <td>{fechaHora(x.fecha_transaccion)}</td><td>{x.medio_pago}</td><td>{x.codigo_autorizacion ?? '—'}</td>
+                    <td>{fechaHora(x.fecha_transaccion)}</td>
+                    <td>{x.medio_pago}{x.monto_recibido != null && <small className="text-muted d-block">Recibido {money(x.monto_recibido)} · vuelto {money(x.vuelto)}</small>}</td>
+                    <td>{x.codigo_autorizacion ?? '—'}</td>
                     <td><span className={`badge text-bg-${x.estado === 'Aprobado' ? 'success' : 'secondary'}`}>{x.estado}</span></td>
                     <td className="text-end">{money(x.monto)}</td>
                   </tr>

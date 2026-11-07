@@ -19,12 +19,15 @@ export const pedidoSchema = z.object({
 
 // Pago dividido en uno o más medios. Sin efectivo la suma calza exacto con el total; el efectivo se informa ya
 // redondeado al múltiplo de $10 (Ley 20.956), lo valida validarCobro en el servicio.
+// efectivo_recibido: billetes y monedas que entregó el cliente; con él se calcula y registra el vuelto (HU-91).
 export const pagosSchema = z.object({
   pagos: z.array(z.object({
     medio_pago_id: uuid,
     monto: z.number().positive('El monto debe ser mayor a cero.'),
     codigo_autorizacion: optionalText(50),
   })).min(1, 'Indique al menos un medio de pago.'),
+  efectivo_recibido: z.number().int('El efectivo recibido va en pesos, sin decimales.').min(0).max(100000000).nullish()
+    .transform((v) => v ?? null),
 });
 
 export const estadoSchema = z.object({ estado: z.string().trim().min(1) });
