@@ -73,8 +73,8 @@ r.post('/:id/reservar', async (req, res) => {
 });
 
 r.post('/:id/pagos', async (req, res) => {
-  const { pagos } = pagosSchema.parse(req.body);
-  await withTx(req.usuarioId, (db) => registrarPagos(db, req.params.id, pagos));
+  const { pagos, efectivo_recibido: recibido } = pagosSchema.parse(req.body);
+  await withTx(req.usuarioId, (db) => registrarPagos(db, req.params.id, pagos, recibido));
   res.json(await detallePedido(pool, req.params.id));
 });
 
