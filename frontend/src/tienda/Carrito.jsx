@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { money } from '../format.js';
 import { tiendaApi } from './apiTienda.js';
 import { useCarrito } from './CarritoContext.jsx';
 import { Aviso, Cargando, ImagenProducto, SelectorCantidad } from './comunes.jsx';
 import { MAX_CANTIDAD } from './carrito.js';
+import { useCuenta } from './CuentaContext.jsx';
 import { FUNCIONES } from './contenido.js';
 import { useDatosTienda } from './DatosTienda.jsx';
 
@@ -14,8 +15,10 @@ const MENSAJE = {
 };
 
 // Carro: el navegador guarda producto y cantidad; precios, descuentos, stock y totales los calcula el servidor en
-// cada cambio. Solo se puede continuar si todas las líneas se pueden vender.
+// cada cambio. Solo se puede continuar si todas las líneas se pueden vender. Para continuar hay que ingresar (HU-71).
 export default function Carrito() {
+  const navigate = useNavigate();
+  const { cliente } = useCuenta();
   const { items, cambiar, quitar, vaciar } = useCarrito();
   const { sucursales } = useDatosTienda();
   const [cotizacion, setCotizacion] = useState(null);
@@ -75,7 +78,7 @@ export default function Carrito() {
             {FUNCIONES.despacho && (
               <div>
                 <i className="bi bi-truck" aria-hidden="true" />
-                <div><b>Despacho a domicilio</b><span>El costo depende de tu comuna</span></div>
+                <div><b>Despacho a domicilio</b><span>Lo eliges en el paso siguiente</span></div>
               </div>
             )}
           </div>
@@ -121,11 +124,13 @@ export default function Carrito() {
           <div className="fct-fila"><span>Retiro en farmacia</span><b>Gratis</b></div>
           <div className="fct-total"><span>Total</span><b>{money(cotizacion.total)}</b></div>
           <p className="fct-nota">IVA incluido ({money(cotizacion.iva)}).</p>
-          <button type="button" className="fct-btn-primario" disabled={!FUNCIONES.checkout || !cotizacion.puede_continuar}>Continuar compra</button>
+          <button type="button" className="fct-btn-primario" disabled={!FUNCIONES.checkout || !cotizacion.puede_continuar}
+            onClick={() => navigate(cliente ? '/tienda/checkout' : '/tienda/cuenta?volver=/tienda/checkout')}>Continuar compra</button>
           <p className="fct-nota">
             {!cotizacion.puede_continuar
               ? 'Revisa los productos marcados antes de continuar.'
-              : !FUNCIONES.checkout && 'El pago en línea se habilita pronto. Mientras tanto, puedes armar tu carro y revisar el total.'}
+              : !FUNCIONES.checkout ? 'El pago en línea se habilita pronto. Mientras tanto, puedes armar tu carro y revisar el total.'
+                : !cliente && 'Te pediremos ingresar o crear tu cuenta para continuar.'}
           </p>
           <Link to="/tienda/productos" className="fct-seguir">Seguir comprando</Link>
         </aside>

@@ -107,7 +107,9 @@ async function insertarLineas(db, pedidoId, items) {
 /**
  * Crea un pedido "Pago pendiente" con sus líneas.
  * @param d      { sucursal_id, nombre_cliente, telefono, direccion_pedido, comuna_id, items:[{producto_id,cantidad}], reservar }
- * @param ctx    { canal: 'Online' | 'Presencial', usuarioId, turnoId?, clienteId? }  (Presencial exige turnoId; lo valida la base)
+ * @param ctx    { canal: 'Online' | 'Presencial', usuarioId, turnoId?, clienteId?, vendedorId? }  (Presencial exige turnoId;
+ *               lo valida la base). vendedorId: quién atendió; por defecto usuarioId. En la tienda va vacío (HU-71).
+ * d.tipo_entrega: 'retiro' o 'despacho' en los pedidos web; vacío en los demás.
  */
 export async function crearPedido(db, d, ctx) {
   const { rows: canal } = await db.query('SELECT id, requiere_turno FROM canal_venta WHERE nombre = $1', [ctx.canal]);
@@ -119,10 +121,11 @@ export async function crearPedido(db, d, ctx) {
   }
   const { rows } = await db.query(
     `INSERT INTO pedido (canal_venta_id, estado_pedido_id, nombre_cliente, direccion_pedido, telefono, comuna_id,
-                         cliente_id, vendedor_id, sucursal_id, turno_caja_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+                         cliente_id, vendedor_id, sucursal_id, turno_caja_id, tipo_entrega)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [canal[0].id, await estadoPedidoId(db, ESTADO.PENDIENTE), d.nombre_cliente, d.direccion_pedido ?? null, d.telefono ?? null,
-      d.comuna_id ?? null, ctx.clienteId ?? null, ctx.usuarioId, d.sucursal_id, ctx.turnoId ?? null]);
+      d.comuna_id ?? null, ctx.clienteId ?? null, ctx.vendedorId !== undefined ? ctx.vendedorId : ctx.usuarioId, d.sucursal_id,
+      ctx.turnoId ?? null, d.tipo_entrega ?? null]);
   await insertarLineas(db, rows[0].id, d.items);
   if (d.reservar) await reservarStock(db, rows[0].id);
   return rows[0].id;
@@ -324,7 +327,7 @@ export async function detallePedido(db, id) {
             p.nombre_cliente, p.telefono, p.direccion_pedido, p.comuna_id, c.nombre AS comuna,
             e.nombre AS estado, p.estado_pedido_id, cv.nombre AS canal, cv.requiere_turno,
             p.sucursal_id, s.nombre AS sucursal, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,
-            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id
+            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id, p.cliente_id, p.tipo_entrega
        FROM pedido p
        JOIN estado_pedido e ON e.id = p.estado_pedido_id
        JOIN canal_venta cv ON cv.id = p.canal_venta_id

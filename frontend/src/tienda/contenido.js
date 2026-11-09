@@ -16,8 +16,9 @@ export const FARMACIA = {
 // true cuando entrega lo que la función necesita. Mientras estén en false, la tienda no muestra esos elementos.
 export const FUNCIONES = {
   cuenta: true,         // HU-68: iniciar sesión y crear cuenta (Sprint 6)
-  checkout: false,      // HU-71: continuar la compra desde el carro (Sprint 6)
-  despacho: false,      // HU-71 y HU-78: despacho a domicilio con costo por comuna (Sprints 6 y 7)
+  checkout: true,       // HU-71: continuar la compra desde el carro (Sprint 6)
+  despacho: true,       // HU-71 y HU-78: despacho a domicilio (Sprint 6, sin costo) con costo por comuna (Sprint 7)
+  pago: false,          // HU-72: pagar con Webpay Plus desde el pedido (Sprint 6)
   seguimiento: false,   // HU-75: sigue tu pedido (Sprint 7)
 };
 

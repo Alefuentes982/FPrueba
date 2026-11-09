@@ -63,3 +63,11 @@ export const cuentaApi = {
   nuevaClave: (accessToken, password) => pedir('/cuenta/nueva-clave', { method: 'POST', body: { access_token: accessToken, password } }),
   yo: () => pedirConSesion('/cuenta/yo'),
 };
+
+// Checkout y pedido web (HU-71). Solo con sesión de cliente.
+export const pedidosApi = {
+  opciones: (items) => pedirConSesion('/pedidos/opciones', { method: 'POST', body: { items } }),
+  crear: (datos) => pedirConSesion('/pedidos', { method: 'POST', body: datos }),
+  ver: (id) => pedirConSesion(`/pedidos/${id}`),
+  cancelar: (id) => pedirConSesion(`/pedidos/${id}/cancelar`, { method: 'POST' }),
+};
