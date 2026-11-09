@@ -23,6 +23,7 @@ export const ventaSchema = z.object({
   items: lineas,
   nombre_cliente: optionalText(150),
   pagos: pagosSchema.shape.pagos,
+  efectivo_recibido: pagosSchema.shape.efectivo_recibido,
 });
 
 export const cajaSchema = z.object({ sucursal_id: uuid });
