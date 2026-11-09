@@ -76,3 +76,43 @@ test('un saldo en efectivo que se redondea a cero, o ya cubierto por otros medio
 test('varias líneas en efectivo se redondean juntas', () => {
   assert.equal(cobro(3094, [{ medio_pago_id: EF, monto: 1000 }, { medio_pago_id: EF, monto: 2090 }]), -4);
 });
+
+// ---- Efectivo recibido y vuelto (HU-91) ----
+import { validarEfectivoRecibido } from './servicio.js';
+
+const recibe = (total, pagos, recibido) => validarEfectivoRecibido({ total, pagos, efectivoId: EF, recibido });
+
+test('solo efectivo: registra lo recibido y el vuelto, aunque el vuelto sea grande', () => {
+  assert.deepEqual(recibe(3094, [{ medio_pago_id: EF, monto: 3090 }], 5000), { recibido: 5000, vuelto: 1910 });
+  assert.deepEqual(recibe(3094, [{ medio_pago_id: EF, monto: 3090 }], 3090), { recibido: 3090, vuelto: 0 });
+  assert.deepEqual(recibe(2000, [{ medio_pago_id: EF, monto: 2000 }], 10000), { recibido: 10000, vuelto: 8000 });
+});
+
+test('sin efectivo recibido no se registra nada', () => {
+  assert.equal(recibe(3094, [{ medio_pago_id: EF, monto: 3090 }], null), null);
+});
+
+test('lo recibido no puede ser menos que el efectivo a cobrar', () => {
+  assert.throws(() => recibe(3094, [{ medio_pago_id: EF, monto: 3090 }], 3000), /no alcanza para el efectivo a cobrar \(\$3\.090\)/);
+});
+
+test('sin pago en efectivo no se informa efectivo recibido', () => {
+  assert.throws(() => recibe(3094, [{ medio_pago_id: TJ, monto: 3094 }], 5000), /Solo se informa el efectivo recibido/);
+});
+
+test('pago mixto: si lo recibido cubre el total, se cobra todo en efectivo', () => {
+  // 10.000 = 6.000 con tarjeta + 4.000 en efectivo, y el cliente entrega 10.000
+  assert.throws(() => recibe(10000, [{ medio_pago_id: TJ, monto: 6000 }, { medio_pago_id: EF, monto: 4000 }], 10000), /cubre el total de \$10\.000/);
+  // Total 3.094: el efectivo redondeado sería 3.090 y el cliente entrega justo eso
+  assert.throws(() => recibe(3094, [{ medio_pago_id: TJ, monto: 1004 }, { medio_pago_id: EF, monto: 2090 }], 3090), /cubre el total/);
+});
+
+test('pago mixto: un vuelto igual o mayor que el efectivo a cobrar obliga a reajustar', () => {
+  assert.throws(() => recibe(10000, [{ medio_pago_id: TJ, monto: 7000 }, { medio_pago_id: EF, monto: 3000 }], 6000), /vuelto \(\$3\.000\) es igual o mayor que el efectivo a cobrar \(\$3\.000\)/);
+  assert.throws(() => recibe(10000, [{ medio_pago_id: TJ, monto: 8000 }, { medio_pago_id: EF, monto: 2000 }], 5000), /reajuste/);
+});
+
+test('pago mixto coherente: se acepta con su vuelto', () => {
+  assert.deepEqual(recibe(10000, [{ medio_pago_id: TJ, monto: 6000 }, { medio_pago_id: EF, monto: 4000 }], 5000), { recibido: 5000, vuelto: 1000 });
+  assert.deepEqual(recibe(3094, [{ medio_pago_id: TJ, monto: 1000 }, { medio_pago_id: EF, monto: 2090 }], 2100), { recibido: 2100, vuelto: 10 });
+});

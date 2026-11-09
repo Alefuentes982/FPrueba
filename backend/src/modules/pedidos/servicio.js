@@ -176,9 +176,35 @@ export function validarCobro({ total, pagos, efectivoId }) {
   return aPesos(esperadoC - valorEfectivoC);
 }
 
+// Efectivo recibido y vuelto (HU-91). Se llama después de validarCobro, con los mismos pagos.
+//   - Lo recibido no puede ser menos que el efectivo a cobrar (ya redondeado).
+//   - En un pago mixto (efectivo y otro medio), si lo recibido cubre el total, el otro medio sobra: se cobra todo en
+//     efectivo. Y si el vuelto es igual o mayor que el efectivo a cobrar, el reparto está mal hecho: hay que reajustarlo.
+// Devuelve { recibido, vuelto } en pesos, o null si no se informó lo recibido.
+export function validarEfectivoRecibido({ total, pagos, efectivoId, recibido }) {
+  if (recibido == null) return null;
+  const efectivoC = pagos.filter((x) => x.medio_pago_id === efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const otrosC = pagos.filter((x) => x.medio_pago_id !== efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const recibidoC = aCentavos(recibido);
+  if (efectivoC === 0) throw new HttpError(400, 'Solo se informa el efectivo recibido cuando hay un pago en efectivo.');
+  if (recibidoC < efectivoC) {
+    throw new HttpError(409, `El efectivo recibido (${pesos(aPesos(recibidoC))}) no alcanza para el efectivo a cobrar (${pesos(aPesos(efectivoC))}).`);
+  }
+  const vueltoC = recibidoC - efectivoC;
+  if (otrosC > 0) {
+    if (recibidoC >= redondearEfectivo(aCentavos(total))) {
+      throw new HttpError(409, `El efectivo recibido (${pesos(aPesos(recibidoC))}) cubre el total de ${pesos(total)}: cobre todo en efectivo, sin el otro medio de pago.`);
+    }
+    if (vueltoC >= efectivoC) {
+      throw new HttpError(409, `El vuelto (${pesos(aPesos(vueltoC))}) es igual o mayor que el efectivo a cobrar (${pesos(aPesos(efectivoC))}): reajuste cuánto se paga en efectivo y cuánto con el otro medio.`);
+    }
+  }
+  return { recibido: aPesos(recibidoC), vuelto: aPesos(vueltoC) };
+}
+
 // Registra el pago (aprobado) y pasa el pedido a "Pagado". Reserva el stock si aún no lo estaba, de modo que la
 // caja pueda crear, reservar y cobrar en una sola transacción. El efectivo se redondea (ver validarCobro).
-export async function registrarPagos(db, id, pagos) {
+export async function registrarPagos(db, id, pagos, recibido = null) {
   const p = await bloquearPedido(db, id);
   if (p.estado !== ESTADO.PENDIENTE) throw new HttpError(409, 'Solo se paga un pedido en "Pago pendiente".');
   if (aCentavos(p.total) <= 0) throw new HttpError(409, 'El pedido no tiene monto que cobrar.');
@@ -188,13 +214,20 @@ export async function registrarPagos(db, id, pagos) {
   }
   const efectivoId = medios.find((m) => m.nombre === 'Efectivo')?.id ?? null;
   const redondeo = validarCobro({ total: p.total, pagos, efectivoId });
+  const efectivo = validarEfectivoRecibido({ total: p.total, pagos, efectivoId, recibido });
   if (!(await stockReservado(db, id))) await reservarStock(db, id);
   const aprobado = await db.query("SELECT id FROM estado_transaccion WHERE nombre = 'Aprobado'");
   if (!aprobado.rows[0]) throw new HttpError(500, 'Falta el estado de transacción "Aprobado".');
-  for (const x of pagos) {
+  // Lo recibido y el vuelto quedan en la línea de efectivo; si hay varias, en la primera y con el resto sumado.
+  const primera = pagos.findIndex((x) => x.medio_pago_id === efectivoId);
+  const efectivoTotal = pagos.filter((x) => x.medio_pago_id === efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  for (const [i, x] of pagos.entries()) {
+    const conRecibido = efectivo && i === primera;
+    const recibidoLinea = conRecibido ? aPesos(aCentavos(x.monto) + aCentavos(efectivo.recibido) - efectivoTotal) : null;
     await db.query(
-      `INSERT INTO transaccion_pago (pedido_id, medio_pago_id, estado_transaccion_id, monto, codigo_autorizacion)
-       VALUES ($1,$2,$3,$4,$5)`, [id, x.medio_pago_id, aprobado.rows[0].id, x.monto, x.codigo_autorizacion ?? null]);
+      `INSERT INTO transaccion_pago (pedido_id, medio_pago_id, estado_transaccion_id, monto, codigo_autorizacion, monto_recibido, vuelto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [id, x.medio_pago_id, aprobado.rows[0].id, x.monto, x.codigo_autorizacion ?? null, recibidoLinea, conRecibido ? efectivo.vuelto : null]);
   }
   await db.query('UPDATE pedido SET redondeo = $1, estado_pedido_id = $2 WHERE id = $3', [redondeo, await estadoPedidoId(db, ESTADO.PAGADO), id]);
 }
@@ -307,7 +340,7 @@ export async function detallePedido(db, id) {
          FROM detalle_pedido d JOIN producto p ON p.id = d.producto_id LEFT JOIN regla_descuento r ON r.id = d.regla_descuento_id
         WHERE d.pedido_id = $1 ORDER BY d.nombre_producto`, [id]),
     db.query(
-      `SELECT t.id, t.fecha_transaccion, t.monto, t.codigo_autorizacion, mp.nombre AS medio_pago, et.nombre AS estado
+      `SELECT t.id, t.fecha_transaccion, t.monto, t.codigo_autorizacion, t.monto_recibido, t.vuelto, mp.nombre AS medio_pago, et.nombre AS estado
          FROM transaccion_pago t JOIN medio_pago mp ON mp.id = t.medio_pago_id JOIN estado_transaccion et ON et.id = t.estado_transaccion_id
         WHERE t.pedido_id = $1 ORDER BY t.fecha_transaccion`, [id]),
     stockReservado(db, id),

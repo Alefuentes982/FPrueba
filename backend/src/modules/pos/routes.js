@@ -83,7 +83,7 @@ r.post('/ventas', async (req, res) => {
       sucursal_id: turno.sucursal_id, nombre_cliente: d.nombre_cliente ?? 'Cliente mostrador', telefono: null,
       direccion_pedido: null, comuna_id: null, items: d.items, reservar: false,
     }, { canal: 'Presencial', usuarioId: req.usuarioId, turnoId: turno.id });
-    await registrarPagos(db, pedidoId, d.pagos);
+    await registrarPagos(db, pedidoId, d.pagos, d.efectivo_recibido);
     await entregarEnMostrador(db, pedidoId);
     return pedidoId;
   });
