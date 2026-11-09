@@ -14,8 +14,9 @@ export async function cargarUsuario(id) {
 }
 
 // Valida el token contra Supabase Auth. Se cachea 60 s para no hacer un viaje de red por cada request.
+// También lo usa la tienda para las cuentas de cliente (modules/tienda/sesionCliente.js).
 const tokens = new Map();
-async function idDesdeToken(token) {
+export async function idDesdeToken(token) {
   const hit = tokens.get(token);
   if (hit && hit.exp > Date.now()) return hit.id;
   const { data, error } = await supabaseAnon().auth.getUser(token);

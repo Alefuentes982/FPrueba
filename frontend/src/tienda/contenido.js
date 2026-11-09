@@ -15,7 +15,7 @@ export const FARMACIA = {
 // Funciones del diseño aprobado que dependen de historias de sprints siguientes. Cada historia cambia su valor a
 // true cuando entrega lo que la función necesita. Mientras estén en false, la tienda no muestra esos elementos.
 export const FUNCIONES = {
-  cuenta: false,        // HU-68: iniciar sesión y crear cuenta (Sprint 6)
+  cuenta: true,         // HU-68: iniciar sesión y crear cuenta (Sprint 6)
   checkout: false,      // HU-71: continuar la compra desde el carro (Sprint 6)
   despacho: false,      // HU-71 y HU-78: despacho a domicilio con costo por comuna (Sprints 6 y 7)
   seguimiento: false,   // HU-75: sigue tu pedido (Sprint 7)
