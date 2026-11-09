@@ -31,6 +31,8 @@ docker compose up
 - Plantillas: `backend/.env.example` (API) y `deploy/.env.example` (`.env` de cada VM, `chmod 600`).
 - Secretos de GitHub Actions: `DEV_VM_HOST`, `DEV_VM_USER`, `DEV_VM_SSH_KEY`, `PROD_VM_HOST`, `PROD_VM_USER`, `PROD_VM_SSH_KEY`. Variables: `URL_DEV`, `URL_PROD`.
 - Tienda en línea: `PUBLICO_URL` (dirección pública) y, en Supabase Auth de cada entorno, **URL Configuration** con esa dirección y `<PUBLICO_URL>/tienda/**` en Redirect URLs (correos de confirmación y de nueva contraseña). En local la cuenta se confirma sola y el enlace de nueva contraseña sale en `docker compose logs api`.
+- Acceso desde redes que bloquean DuckDNS: Worker de Cloudflare (`deploy/cloudflare/`) con `WORKER_SECRETO`, ver `deploy/runbooks/acceso-cloudflare.md`.
+
 
 - Ningún secreto va al repositorio. `_privado/` está ignorada por Git y la CI rechaza archivos `.env` reales o credenciales.
 
