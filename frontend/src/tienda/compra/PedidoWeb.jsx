@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { money } from '../../format.js';
 import { pedidosApi } from '../apiTienda.js';
+import { useCarrito } from '../CarritoContext.jsx';
 import { Aviso, Cargando } from '../comunes.jsx';
+import { FUNCIONES } from '../contenido.js';
 import { useCuenta } from '../CuentaContext.jsx';
 import Modal from '../ui/Modal.jsx';
 import { useNotificar } from '../ui/Notificaciones.jsx';
 import { hora } from './Checkout.jsx';
+import PagoWebpay from './PagoWebpay.jsx';
 import { Pasos } from './Pasos.jsx';
 import './compra.css';
 
-// Pedido web del cliente (HU-71): estado, tiempo que queda para pagar, entrega y productos. Desde aquí se anula.
+// Pedido web del cliente (HU-71): estado, tiempo que queda para pagar, entrega y productos. Desde aquí se anula y se
+// paga con Webpay (HU-72); Webpay devuelve aquí al cliente con ?pago=<resultado>, también si el pago se rechaza, se
+// anula o se abandona (HU-73): el mensaje explica qué pasó y, si la reserva sigue vigente, se puede reintentar.
 export default function PedidoWeb() {
   const { id } = useParams();
   const { cliente, cargando } = useCuenta();
@@ -45,11 +50,20 @@ export function usePedido(id) {
 function DetallePedido({ id }) {
   const navigate = useNavigate();
   const notificar = useNotificar();
+  const { search } = useLocation();
+  const { vaciar } = useCarrito();
+  const [resultadoPago] = useState(() => new URLSearchParams(search).get('pago'));
   const { pedido: p, setPedido, error, recargar } = usePedido(id);
   const segundos = useCuentaRegresiva(p?.vence);
   const [confirmarAnular, setConfirmarAnular] = useState(false);
   const [anulando, setAnulando] = useState(false);
   const [errorAccion, setErrorAccion] = useState(null);
+
+  // Al volver de Webpay: se quita ?pago= de la dirección (al recargar no se repite el mensaje) y, si el pedido quedó
+  // pagado, se vacía el carro.
+  useEffect(() => { if (resultadoPago) window.history.replaceState(null, '', window.location.pathname); }, [resultadoPago]);
+  const pagado = p && !['Pago pendiente', 'Cancelado', 'Expirado'].includes(p.estado);
+  useEffect(() => { if (pagado && resultadoPago === 'aprobado') vaciar(); }, [pagado, resultadoPago, vaciar]);
 
   // Al llegar a cero se vuelve a consultar: la API marca el pedido como expirado (puede tardar hasta un minuto).
   const pendiente = p?.estado === 'Pago pendiente';
@@ -83,6 +97,7 @@ function DetallePedido({ id }) {
         <span className={`fct-estado fct-estado-${p.estado.toLowerCase().replace(/\s+/g, '-')}`}>{p.estado}</span>
       </div>
 
+      {resultadoPago && <ResultadoPago resultado={resultadoPago} pedido={p} />}
       <EstadoPedido pedido={p} segundos={segundos} />
       {errorAccion && <Aviso error={errorAccion} />}
 
@@ -91,7 +106,14 @@ function DetallePedido({ id }) {
           {pendiente && (
             <section className="fct-bloque-form fct-zona-pago" aria-labelledby="titulo-pago">
               <h2 id="titulo-pago">Pago</h2>
-              <p className="fct-suave">El pago en línea estará disponible muy pronto. Mientras tanto, tu pedido queda reservado hasta las {hora(p.vence)}.</p>
+              {!FUNCIONES.pago && <p className="fct-suave">El pago en línea estará disponible muy pronto. Mientras tanto, tu pedido queda reservado hasta las {hora(p.vence)}.</p>}
+              {FUNCIONES.pago && segundos >= MINUTOS_MINIMOS_PAGO * 60 && (
+                <PagoWebpay pedido={p} onError={setErrorAccion} texto={p.pagos.length ? 'Intentar de nuevo' : 'Pagar con Webpay'} />
+              )}
+              {FUNCIONES.pago && segundos > 0 && segundos < MINUTOS_MINIMOS_PAGO * 60 && (
+                <p className="fct-suave">Quedan menos de {MINUTOS_MINIMOS_PAGO} minutos de reserva y no alcanza para completar el pago. Anula el pedido y vuelve a comprar desde el carro.</p>
+              )}
+              <IntentosPago pagos={p.pagos} />
             </section>
           )}
 
@@ -185,6 +207,65 @@ export function EstadoPedido({ pedido: p, segundos }) {
     <div className="fct-exito" role="status">
       <i className="bi bi-check-circle-fill" aria-hidden="true" />
       <span>Tu pedido está pagado. {p.entrega === 'despacho' ? 'Te avisaremos cuando salga a despacho.' : `Te avisaremos cuando esté listo para retirar en ${p.sucursal.nombre}.`}</span>
+    </div>
+  );
+}
+
+// Minutos de reserva que deben quedar para empezar a pagar (mismo valor que MINUTOS_MINIMOS_PAGO de la API).
+const MINUTOS_MINIMOS_PAGO = 5;
+
+// Qué pasó en Webpay, en palabras del cliente (HU-73). En ningún caso se hizo un cargo.
+const MENSAJES_PAGO = {
+  rechazado: 'Webpay o tu banco rechazó el pago y no se hizo ningún cargo. Revisa los datos de la tarjeta o prueba con otra.',
+  anulado: 'Anulaste el pago en Webpay. No se hizo ningún cargo.',
+  abortado: 'El pago no se completó por un problema en el formulario de Webpay. No se hizo ningún cargo.',
+  tiempo: 'Se acabó el tiempo para completar el formulario de Webpay. No se hizo ningún cargo.',
+  vencido: 'Tu reserva venció mientras estabas en Webpay, así que no confirmamos el pago y no se hizo ningún cargo.',
+  error: 'No pudimos confirmar el pago con Webpay. Si en tu cuenta aparece un cargo por este pedido, escríbenos con el número de pedido.',
+};
+
+// Intentos de pago del pedido, con su resultado.
+function IntentosPago({ pagos }) {
+  if (!pagos.length) return null;
+  return (
+    <details className="fct-intentos">
+      <summary>Intentos de pago ({pagos.length})</summary>
+      <ul>
+        {pagos.map((x, i) => (
+          <li key={`${x.fecha}-${i}`}>
+            <span>{new Date(x.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Santiago' })} · {x.medio}</span>
+            <b className={`fct-intento-${x.estado.toLowerCase()}`}>{x.estado}</b>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+// Mensaje al volver de Webpay (?pago=...). El estado real lo da el pedido: este aviso solo explica qué pasó.
+function ResultadoPago({ resultado, pedido }) {
+  if (resultado === 'aprobado' && pedido.estado !== 'Pago pendiente') {
+    const pago = pedido.pagos.find((x) => x.estado === 'Aprobado');
+    return (
+      <div className="fct-pago-ok" role="status">
+        <i className="bi bi-check-circle-fill" aria-hidden="true" />
+        <div>
+          <b>¡Pago aprobado!</b>
+          <span>Pagaste {money(pedido.total)} con Webpay{pago?.codigo_autorizacion ? ` (autorización ${pago.codigo_autorizacion})` : ''}. Guarda el número de pedido {pedido.codigo}.</span>
+        </div>
+      </div>
+    );
+  }
+  if (resultado === 'aprobado') return null;
+  const reintentar = pedido.estado === 'Pago pendiente' && pedido.minutos_restantes >= MINUTOS_MINIMOS_PAGO;
+  return (
+    <div className="fct-pago-fallido" role="alert">
+      <i className="bi bi-x-circle-fill" aria-hidden="true" />
+      <div>
+        <b>El pago no se completó</b>
+        <span>{MENSAJES_PAGO[resultado] ?? MENSAJES_PAGO.error}</span>
+        {reintentar && <span>Tus productos siguen reservados: puedes intentarlo de nuevo abajo.</span>}
+      </div>
     </div>
   );
 }
