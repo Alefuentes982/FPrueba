@@ -58,3 +58,17 @@
   .fct-pasos li + li::before { width: 18px; }
   .fct-pasos { font-size: 12.5px; gap: 6px; }
 }
+
+/* Pago con Webpay (HU-72) */
+.fct-webpay { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border: 1.5px solid var(--linea); border-radius: 14px; padding: 14px 16px; }
+.fct-webpay-marca { display: flex; flex-direction: column; align-items: center; line-height: 1; background: #fff; border: 1px solid var(--linea); border-radius: 10px; padding: 8px 12px; }
+.fct-webpay-marca b { color: #C8102E; font-size: 18px; letter-spacing: -0.02em; }
+.fct-webpay-marca small { color: var(--gris); font-size: 11px; }
+.fct-webpay-texto { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+.fct-webpay-texto small { color: var(--gris); font-size: 13px; }
+.fct-webpay .fct-btn-primario { height: 50px; font-size: 16px; }
+.fct-pago-ok { display: flex; gap: 14px; align-items: center; background: #EEF7E2; border: 1px solid #CFE5AE; border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+.fct-pago-ok > i { font-size: 30px; color: var(--vo); }
+.fct-pago-ok div { display: flex; flex-direction: column; gap: 2px; }
+.fct-pago-ok b { font-size: 18px; }
+@media (max-width: 760px) { .fct-webpay .fct-btn-primario { width: 100%; } }

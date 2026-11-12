@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { money } from '../../format.js';
 import { pedidosApi } from '../apiTienda.js';
+import { useCarrito } from '../CarritoContext.jsx';
 import { Aviso, Cargando } from '../comunes.jsx';
+import { FUNCIONES } from '../contenido.js';
 import { useCuenta } from '../CuentaContext.jsx';
 import Modal from '../ui/Modal.jsx';
 import { useNotificar } from '../ui/Notificaciones.jsx';
 import { hora } from './Checkout.jsx';
+import PagoWebpay from './PagoWebpay.jsx';
 import { Pasos } from './Pasos.jsx';
 import './compra.css';
 
-// Pedido web del cliente (HU-71): estado, tiempo que queda para pagar, entrega y productos. Desde aquí se anula.
+// Pedido web del cliente (HU-71): estado, tiempo que queda para pagar, entrega y productos. Desde aquí se anula y se
+// paga con Webpay (HU-72); Webpay devuelve aquí al cliente con ?pago=<resultado>.
 export default function PedidoWeb() {
   const { id } = useParams();
   const { cliente, cargando } = useCuenta();
@@ -45,11 +49,20 @@ export function usePedido(id) {
 function DetallePedido({ id }) {
   const navigate = useNavigate();
   const notificar = useNotificar();
+  const { search } = useLocation();
+  const { vaciar } = useCarrito();
+  const [resultadoPago] = useState(() => new URLSearchParams(search).get('pago'));
   const { pedido: p, setPedido, error, recargar } = usePedido(id);
   const segundos = useCuentaRegresiva(p?.vence);
   const [confirmarAnular, setConfirmarAnular] = useState(false);
   const [anulando, setAnulando] = useState(false);
   const [errorAccion, setErrorAccion] = useState(null);
+
+  // Al volver de Webpay: se quita ?pago= de la dirección (al recargar no se repite el mensaje) y, si el pedido quedó
+  // pagado, se vacía el carro.
+  useEffect(() => { if (resultadoPago) window.history.replaceState(null, '', window.location.pathname); }, [resultadoPago]);
+  const pagado = p && !['Pago pendiente', 'Cancelado', 'Expirado'].includes(p.estado);
+  useEffect(() => { if (pagado && resultadoPago === 'aprobado') vaciar(); }, [pagado, resultadoPago, vaciar]);
 
   // Al llegar a cero se vuelve a consultar: la API marca el pedido como expirado (puede tardar hasta un minuto).
   const pendiente = p?.estado === 'Pago pendiente';
@@ -83,6 +96,7 @@ function DetallePedido({ id }) {
         <span className={`fct-estado fct-estado-${p.estado.toLowerCase().replace(/\s+/g, '-')}`}>{p.estado}</span>
       </div>
 
+      {resultadoPago && <ResultadoPago resultado={resultadoPago} pedido={p} />}
       <EstadoPedido pedido={p} segundos={segundos} />
       {errorAccion && <Aviso error={errorAccion} />}
 
@@ -91,7 +105,9 @@ function DetallePedido({ id }) {
           {pendiente && (
             <section className="fct-bloque-form fct-zona-pago" aria-labelledby="titulo-pago">
               <h2 id="titulo-pago">Pago</h2>
-              <p className="fct-suave">El pago en línea estará disponible muy pronto. Mientras tanto, tu pedido queda reservado hasta las {hora(p.vence)}.</p>
+              {FUNCIONES.pago && segundos > 0
+                ? <PagoWebpay pedido={p} onError={setErrorAccion} texto={resultadoPago && resultadoPago !== 'aprobado' ? 'Intentar de nuevo' : 'Pagar con Webpay'} />
+                : <p className="fct-suave">El pago en línea estará disponible muy pronto. Mientras tanto, tu pedido queda reservado hasta las {hora(p.vence)}.</p>}
             </section>
           )}
 
@@ -187,4 +203,22 @@ export function EstadoPedido({ pedido: p, segundos }) {
       <span>Tu pedido está pagado. {p.entrega === 'despacho' ? 'Te avisaremos cuando salga a despacho.' : `Te avisaremos cuando esté listo para retirar en ${p.sucursal.nombre}.`}</span>
     </div>
   );
+}
+
+// Mensaje al volver de Webpay (?pago=...). El estado real lo da el pedido: este aviso solo explica qué pasó.
+function ResultadoPago({ resultado, pedido }) {
+  if (resultado === 'aprobado' && pedido.estado !== 'Pago pendiente') {
+    const pago = pedido.pagos.find((x) => x.estado === 'Aprobado');
+    return (
+      <div className="fct-pago-ok" role="status">
+        <i className="bi bi-check-circle-fill" aria-hidden="true" />
+        <div>
+          <b>¡Pago aprobado!</b>
+          <span>Pagaste {money(pedido.total)} con Webpay{pago?.codigo_autorizacion ? ` (autorización ${pago.codigo_autorizacion})` : ''}. Guarda el número de pedido {pedido.codigo}.</span>
+        </div>
+      </div>
+    );
+  }
+  if (resultado === 'aprobado') return null;
+  return <Aviso error={{ message: 'El pago no se completó y no se hizo ningún cargo. Puedes intentarlo de nuevo mientras tu pedido esté reservado.' }} />;
 }

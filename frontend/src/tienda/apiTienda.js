@@ -71,3 +71,8 @@ export const pedidosApi = {
   ver: (id) => pedirConSesion(`/pedidos/${id}`),
   cancelar: (id) => pedirConSesion(`/pedidos/${id}/cancelar`, { method: 'POST' }),
 };
+
+// Pago con Webpay Plus (HU-72). Devuelve { url, token } para enviar el navegador a Webpay.
+export const pagosApi = {
+  iniciarWebpay: (pedidoId) => pedirConSesion('/pagos/webpay/iniciar', { method: 'POST', body: { pedido_id: pedidoId } }),
+};
