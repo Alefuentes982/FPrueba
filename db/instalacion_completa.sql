@@ -1786,3 +1786,97 @@ END $$;
 GRANT INSERT (descripcion, presentacion, imagen_url), UPDATE (descripcion, presentacion, imagen_url) ON producto TO app_backend;
 
 COMMIT;
+
+-- =====================================================================
+-- 012 — Tienda en línea: cuenta de cliente (HU-68)
+-- El cliente crea su cuenta en la tienda: Supabase Auth guarda la contraseña y la base guarda su usuario (rol Cliente)
+-- y su ficha en la tabla cliente (RUT, teléfono, dirección y comuna).
+--   * El rol Cliente (y el rol técnico Sistema) nunca tienen módulos del personal: un trigger lo impide aunque alguien
+--     lo intente desde la base, y se corrige cualquier permiso que hubiera quedado marcado.
+--   * cliente.rut se guarda normalizado (12345678-5), como lo deja el backend al validarlo.
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+UPDATE rol_permiso SET permitido = FALSE
+ WHERE permitido AND rol_id IN (SELECT id FROM rol WHERE nombre IN ('Cliente', 'Sistema'));
+
+CREATE OR REPLACE FUNCTION trg_rol_sin_modulos() RETURNS TRIGGER SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF NEW.permitido AND EXISTS (SELECT 1 FROM rol WHERE id = NEW.rol_id AND nombre IN ('Cliente', 'Sistema')) THEN
+        RAISE EXCEPTION 'Los roles Cliente y Sistema no pueden tener módulos del personal.';
+    END IF;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS rol_sin_modulos ON rol_permiso;
+CREATE TRIGGER rol_sin_modulos BEFORE INSERT OR UPDATE ON rol_permiso FOR EACH ROW EXECUTE FUNCTION trg_rol_sin_modulos();
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_cliente_rut') THEN
+        ALTER TABLE cliente ADD CONSTRAINT ck_cliente_rut CHECK (rut IS NULL OR rut ~ '^[1-9][0-9]{0,7}-[0-9K]$');
+    END IF;
+END $$;
+
+COMMENT ON TABLE cliente IS 'Ficha del cliente de la tienda en línea (rol Cliente). La contraseña la guarda Supabase Auth, nunca la base.';
+COMMENT ON COLUMN cliente.rut IS 'RUT normalizado sin puntos y con guion (12345678-5). Se pide al retirar el pedido.';
+
+COMMIT;
+
+-- =====================================================================
+-- 013 — Caja: efectivo recibido y vuelto (HU-91)
+-- En un cobro con efectivo se registra cuánto entregó el cliente y cuánto se le devolvió. transaccion_pago.monto sigue
+-- siendo el efectivo aplicado a la venta (ya redondeado, Ley 20.956): el cierre de caja no cambia.
+--   * transaccion_pago.monto_recibido: billetes y monedas que entregó el cliente (opcional; solo en efectivo).
+--   * transaccion_pago.vuelto: monto_recibido - monto. La base exige que calce.
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+ALTER TABLE transaccion_pago ADD COLUMN IF NOT EXISTS monto_recibido NUMERIC(12,2);
+ALTER TABLE transaccion_pago ADD COLUMN IF NOT EXISTS vuelto NUMERIC(12,2);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_tpago_efectivo_recibido') THEN
+        ALTER TABLE transaccion_pago ADD CONSTRAINT ck_tpago_efectivo_recibido CHECK (
+            (monto_recibido IS NULL AND vuelto IS NULL)
+            OR (monto_recibido >= monto AND vuelto = monto_recibido - monto));
+    END IF;
+END $$;
+
+COMMENT ON COLUMN transaccion_pago.monto_recibido IS 'Efectivo que entregó el cliente (billetes y monedas). Solo en pagos en efectivo; monto es lo aplicado a la venta.';
+COMMENT ON COLUMN transaccion_pago.vuelto IS 'Vuelto entregado: monto_recibido - monto.';
+
+GRANT INSERT (monto_recibido, vuelto) ON transaccion_pago TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 014 — Tienda en línea: forma de entrega del pedido web (HU-71)
+--   * pedido.tipo_entrega: 'retiro' (en la sucursal del pedido) o 'despacho' (a la dirección y comuna del pedido).
+--     Vacío en las ventas de caja y en los pedidos que crea el personal.
+--   * Un despacho exige dirección y comuna.
+--   * Índice para buscar los pedidos web pendientes de un cliente (se anula el anterior al crear uno nuevo).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+ALTER TABLE pedido ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(10);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_pedido_tipo_entrega') THEN
+        ALTER TABLE pedido ADD CONSTRAINT ck_pedido_tipo_entrega CHECK (
+            tipo_entrega IS NULL OR tipo_entrega = 'retiro'
+            OR (tipo_entrega = 'despacho' AND direccion_pedido IS NOT NULL AND comuna_id IS NOT NULL));
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_ped_cliente_estado ON pedido(cliente_id, estado_pedido_id) WHERE cliente_id IS NOT NULL;
+
+COMMENT ON COLUMN pedido.tipo_entrega IS 'Pedido web: retiro (en sucursal_id) o despacho (a direccion_pedido y comuna_id). Vacío en ventas de caja.';
+
+GRANT INSERT (tipo_entrega) ON pedido TO app_backend;
+
+COMMIT;

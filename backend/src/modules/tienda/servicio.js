@@ -27,6 +27,16 @@ export async function sucursalesWeb(db) {
   return rows;
 }
 
+// Regiones con sus comunas, para los formularios de la cuenta y del despacho. Solo regiones que tienen comunas cargadas.
+export async function listarComunas(db) {
+  const { rows } = await db.query(
+    `SELECT r.id, r.nombre, json_agg(json_build_object('id', c.id, 'nombre', c.nombre) ORDER BY c.nombre) AS comunas
+       FROM region r JOIN comuna c ON c.region_id = r.id
+      GROUP BY r.id, r.nombre
+      ORDER BY r.nombre`);
+  return rows;
+}
+
 // Unidades vendidas por producto en los últimos 90 días (orden "Más vendidos"). No cuenta pedidos sin pagar,
 // cancelados ni expirados.
 const VENDIDOS = `

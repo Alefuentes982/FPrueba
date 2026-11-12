@@ -107,7 +107,9 @@ async function insertarLineas(db, pedidoId, items) {
 /**
  * Crea un pedido "Pago pendiente" con sus líneas.
  * @param d      { sucursal_id, nombre_cliente, telefono, direccion_pedido, comuna_id, items:[{producto_id,cantidad}], reservar }
- * @param ctx    { canal: 'Online' | 'Presencial', usuarioId, turnoId?, clienteId? }  (Presencial exige turnoId; lo valida la base)
+ * @param ctx    { canal: 'Online' | 'Presencial', usuarioId, turnoId?, clienteId?, vendedorId? }  (Presencial exige turnoId;
+ *               lo valida la base). vendedorId: quién atendió; por defecto usuarioId. En la tienda va vacío (HU-71).
+ * d.tipo_entrega: 'retiro' o 'despacho' en los pedidos web; vacío en los demás.
  */
 export async function crearPedido(db, d, ctx) {
   const { rows: canal } = await db.query('SELECT id, requiere_turno FROM canal_venta WHERE nombre = $1', [ctx.canal]);
@@ -119,10 +121,11 @@ export async function crearPedido(db, d, ctx) {
   }
   const { rows } = await db.query(
     `INSERT INTO pedido (canal_venta_id, estado_pedido_id, nombre_cliente, direccion_pedido, telefono, comuna_id,
-                         cliente_id, vendedor_id, sucursal_id, turno_caja_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+                         cliente_id, vendedor_id, sucursal_id, turno_caja_id, tipo_entrega)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
     [canal[0].id, await estadoPedidoId(db, ESTADO.PENDIENTE), d.nombre_cliente, d.direccion_pedido ?? null, d.telefono ?? null,
-      d.comuna_id ?? null, ctx.clienteId ?? null, ctx.usuarioId, d.sucursal_id, ctx.turnoId ?? null]);
+      d.comuna_id ?? null, ctx.clienteId ?? null, ctx.vendedorId !== undefined ? ctx.vendedorId : ctx.usuarioId, d.sucursal_id,
+      ctx.turnoId ?? null, d.tipo_entrega ?? null]);
   await insertarLineas(db, rows[0].id, d.items);
   if (d.reservar) await reservarStock(db, rows[0].id);
   return rows[0].id;
@@ -176,9 +179,35 @@ export function validarCobro({ total, pagos, efectivoId }) {
   return aPesos(esperadoC - valorEfectivoC);
 }
 
+// Efectivo recibido y vuelto (HU-91). Se llama después de validarCobro, con los mismos pagos.
+//   - Lo recibido no puede ser menos que el efectivo a cobrar (ya redondeado).
+//   - En un pago mixto (efectivo y otro medio), si lo recibido cubre el total, el otro medio sobra: se cobra todo en
+//     efectivo. Y si el vuelto es igual o mayor que el efectivo a cobrar, el reparto está mal hecho: hay que reajustarlo.
+// Devuelve { recibido, vuelto } en pesos, o null si no se informó lo recibido.
+export function validarEfectivoRecibido({ total, pagos, efectivoId, recibido }) {
+  if (recibido == null) return null;
+  const efectivoC = pagos.filter((x) => x.medio_pago_id === efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const otrosC = pagos.filter((x) => x.medio_pago_id !== efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  const recibidoC = aCentavos(recibido);
+  if (efectivoC === 0) throw new HttpError(400, 'Solo se informa el efectivo recibido cuando hay un pago en efectivo.');
+  if (recibidoC < efectivoC) {
+    throw new HttpError(409, `El efectivo recibido (${pesos(aPesos(recibidoC))}) no alcanza para el efectivo a cobrar (${pesos(aPesos(efectivoC))}).`);
+  }
+  const vueltoC = recibidoC - efectivoC;
+  if (otrosC > 0) {
+    if (recibidoC >= redondearEfectivo(aCentavos(total))) {
+      throw new HttpError(409, `El efectivo recibido (${pesos(aPesos(recibidoC))}) cubre el total de ${pesos(total)}: cobre todo en efectivo, sin el otro medio de pago.`);
+    }
+    if (vueltoC >= efectivoC) {
+      throw new HttpError(409, `El vuelto (${pesos(aPesos(vueltoC))}) es igual o mayor que el efectivo a cobrar (${pesos(aPesos(efectivoC))}): reajuste cuánto se paga en efectivo y cuánto con el otro medio.`);
+    }
+  }
+  return { recibido: aPesos(recibidoC), vuelto: aPesos(vueltoC) };
+}
+
 // Registra el pago (aprobado) y pasa el pedido a "Pagado". Reserva el stock si aún no lo estaba, de modo que la
 // caja pueda crear, reservar y cobrar en una sola transacción. El efectivo se redondea (ver validarCobro).
-export async function registrarPagos(db, id, pagos) {
+export async function registrarPagos(db, id, pagos, recibido = null) {
   const p = await bloquearPedido(db, id);
   if (p.estado !== ESTADO.PENDIENTE) throw new HttpError(409, 'Solo se paga un pedido en "Pago pendiente".');
   if (aCentavos(p.total) <= 0) throw new HttpError(409, 'El pedido no tiene monto que cobrar.');
@@ -188,13 +217,20 @@ export async function registrarPagos(db, id, pagos) {
   }
   const efectivoId = medios.find((m) => m.nombre === 'Efectivo')?.id ?? null;
   const redondeo = validarCobro({ total: p.total, pagos, efectivoId });
+  const efectivo = validarEfectivoRecibido({ total: p.total, pagos, efectivoId, recibido });
   if (!(await stockReservado(db, id))) await reservarStock(db, id);
   const aprobado = await db.query("SELECT id FROM estado_transaccion WHERE nombre = 'Aprobado'");
   if (!aprobado.rows[0]) throw new HttpError(500, 'Falta el estado de transacción "Aprobado".');
-  for (const x of pagos) {
+  // Lo recibido y el vuelto quedan en la línea de efectivo; si hay varias, en la primera y con el resto sumado.
+  const primera = pagos.findIndex((x) => x.medio_pago_id === efectivoId);
+  const efectivoTotal = pagos.filter((x) => x.medio_pago_id === efectivoId).reduce((s, x) => s + aCentavos(x.monto), 0);
+  for (const [i, x] of pagos.entries()) {
+    const conRecibido = efectivo && i === primera;
+    const recibidoLinea = conRecibido ? aPesos(aCentavos(x.monto) + aCentavos(efectivo.recibido) - efectivoTotal) : null;
     await db.query(
-      `INSERT INTO transaccion_pago (pedido_id, medio_pago_id, estado_transaccion_id, monto, codigo_autorizacion)
-       VALUES ($1,$2,$3,$4,$5)`, [id, x.medio_pago_id, aprobado.rows[0].id, x.monto, x.codigo_autorizacion ?? null]);
+      `INSERT INTO transaccion_pago (pedido_id, medio_pago_id, estado_transaccion_id, monto, codigo_autorizacion, monto_recibido, vuelto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [id, x.medio_pago_id, aprobado.rows[0].id, x.monto, x.codigo_autorizacion ?? null, recibidoLinea, conRecibido ? efectivo.vuelto : null]);
   }
   await db.query('UPDATE pedido SET redondeo = $1, estado_pedido_id = $2 WHERE id = $3', [redondeo, await estadoPedidoId(db, ESTADO.PAGADO), id]);
 }
@@ -291,7 +327,7 @@ export async function detallePedido(db, id) {
             p.nombre_cliente, p.telefono, p.direccion_pedido, p.comuna_id, c.nombre AS comuna,
             e.nombre AS estado, p.estado_pedido_id, cv.nombre AS canal, cv.requiere_turno,
             p.sucursal_id, s.nombre AS sucursal, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,
-            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id
+            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id, p.cliente_id, p.tipo_entrega
        FROM pedido p
        JOIN estado_pedido e ON e.id = p.estado_pedido_id
        JOIN canal_venta cv ON cv.id = p.canal_venta_id
@@ -307,7 +343,7 @@ export async function detallePedido(db, id) {
          FROM detalle_pedido d JOIN producto p ON p.id = d.producto_id LEFT JOIN regla_descuento r ON r.id = d.regla_descuento_id
         WHERE d.pedido_id = $1 ORDER BY d.nombre_producto`, [id]),
     db.query(
-      `SELECT t.id, t.fecha_transaccion, t.monto, t.codigo_autorizacion, mp.nombre AS medio_pago, et.nombre AS estado
+      `SELECT t.id, t.fecha_transaccion, t.monto, t.codigo_autorizacion, t.monto_recibido, t.vuelto, mp.nombre AS medio_pago, et.nombre AS estado
          FROM transaccion_pago t JOIN medio_pago mp ON mp.id = t.medio_pago_id JOIN estado_transaccion et ON et.id = t.estado_transaccion_id
         WHERE t.pedido_id = $1 ORDER BY t.fecha_transaccion`, [id]),
     stockReservado(db, id),

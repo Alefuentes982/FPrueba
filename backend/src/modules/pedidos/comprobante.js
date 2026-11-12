@@ -39,13 +39,20 @@ export async function comprobantePedido(db, id) {
       ['Neto', clp(p.subtotal_neto)], ['IVA 19%', clp(p.iva)], ['Total', clp(p.total)],
       ...(redondeo ? [['Ajuste por redondeo (Ley 20.956)', `${redondeo < 0 ? '-' : '+'}${clp(Math.abs(redondeo))}`], ['Total pagado', clp(Number(p.total) + redondeo)]] : []),
     ],
-    nota: pagado.length
-      ? `Pagado con: ${pagado.map((x) => `${x.medio_pago} ${clp(x.monto)}`).join(', ')}. Documento no tributario.`
-      : 'Documento no tributario.',
+    nota: notaPagos(pagado),
     sello: p.estado === ESTADO.PENDIENTE ? 'PENDIENTE' : [ESTADO.CANCELADO, ESTADO.EXPIRADO].includes(p.estado) ? 'ANULADO' : null,
   });
   const pdf = await pdfABuffer(doc);
   return { archivo: `${p.codigo}.pdf`, tipo: 'application/pdf', base64: pdf.toString('base64') };
+}
+
+// Medios de pago del comprobante. En efectivo se imprime también lo que entregó el cliente y el vuelto (HU-91).
+export function notaPagos(pagado) {
+  if (!pagado.length) return 'Documento no tributario.';
+  const medios = pagado.map((x) => `${x.medio_pago} ${clp(x.monto)}`).join(', ');
+  const efectivo = pagado.find((x) => x.monto_recibido != null);
+  const recibido = efectivo ? ` Efectivo recibido ${clp(efectivo.monto_recibido)}, vuelto ${clp(efectivo.vuelto)}.` : '';
+  return `Pagado con: ${medios}.${recibido} Documento no tributario.`;
 }
 
 // Envía el comprobante del pedido por correo, con el PDF adjunto.

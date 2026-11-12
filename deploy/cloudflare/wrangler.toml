@@ -1,0 +1,8 @@
+# Configuración del Worker para desplegarlo con Wrangler (opcional: también se puede pegar worker.js en el panel de
+# Cloudflare, ver deploy/runbooks/acceso-cloudflare.md). El secreto NUNCA va aquí: wrangler secret put SECRETO
+name = "farmaclick"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ORIGEN = "https://<dominio-de-produccion>"

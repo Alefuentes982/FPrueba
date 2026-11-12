@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import logo from '../assets/farmaclick-logo.svg';
 import { useCarrito } from './CarritoContext.jsx';
+import { primerNombre, useCuenta } from './CuentaContext.jsx';
 import { FARMACIA, FUNCIONES } from './contenido.js';
 import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
 import PanelLateral from './ui/PanelLateral.jsx';
@@ -14,6 +15,7 @@ export default function Encabezado() {
   const [params] = useSearchParams();
   const { categorias, sucursales } = useDatosTienda();
   const { unidades } = useCarrito();
+  const { cliente } = useCuenta();
   const [texto, setTexto] = useState(params.get('q') ?? '');
   const [panel, setPanel] = useState(false);
 
@@ -76,8 +78,10 @@ export default function Encabezado() {
             <button type="submit">Buscar</button>
           </form>
           {FUNCIONES.cuenta && (
-            <Link to="/tienda/cuenta" className="fct-cuenta">
-              <i className="bi bi-person" aria-hidden="true" /><span><small>Hola,</small>Inicia sesión</span>
+            <Link to="/tienda/cuenta" className={`fct-cuenta${cliente ? ' fct-cuenta-con-sesion' : ''}`}
+              aria-label={cliente ? `Mi cuenta, ${cliente.nombre}` : 'Inicia sesión o crea tu cuenta'}>
+              <i className={`bi ${cliente ? 'bi-person-check' : 'bi-person'}`} aria-hidden="true" />
+              <span><small>Hola{cliente ? `, ${primerNombre(cliente)}` : ','}</small>{cliente ? 'Mi cuenta' : 'Inicia sesión'}</span>
             </Link>
           )}
           <Link to="/tienda/carrito" className="fct-carro" aria-label={`Mi carro, ${unidades} unidades`}>

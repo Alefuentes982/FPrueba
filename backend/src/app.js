@@ -4,6 +4,7 @@ import cors from 'cors';
 import { autenticar, exigeModulo } from './core/auth.js';
 import { routerCatalogos } from './core/catalogos.js';
 import { errorHandler, HttpError } from './core/errors.js';
+import { ipDesdeWorker } from './core/ipCliente.js';
 import { pool } from './core/db.js';
 import modulos from './modules/index.js';
 
@@ -11,6 +12,8 @@ export const app = express();
 // Saltos de proxy delante de la API, para que el rate limit vea la IP real del cliente: 1 con un solo proxy (hosting o
 // Nginx); 2 en Oracle Cloud (balanceador → Nginx → API). Se define con TRUST_PROXY.
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+// Detrás del Worker de Cloudflare (HU-92) la IP real llega en una cabecera firmada con WORKER_SECRETO.
+app.use(ipDesdeWorker);
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? true }));
 app.use(express.json());
 

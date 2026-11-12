@@ -85,7 +85,7 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
 
   const nuevaVenta = () => { setHecha(null); setCarrito([]); setCliente(''); setCobrando(false); setError(null); setBusqueda(''); };
 
-  const cobrar = async (pagos, { vuelto }) => {
+  const cobrar = async (pagos, { vuelto, recibido }) => {
     setError(null);
     setBusy(true);
     try {
@@ -93,6 +93,7 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
         items: carrito.map((l) => ({ producto_id: l.producto_id, cantidad: Number(l.cantidad) })),
         nombre_cliente: cliente || null,
         pagos,
+        efectivo_recibido: recibido,
       });
       setHecha({ pedido, vuelto });
       setCarrito([]);
