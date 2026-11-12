@@ -19,3 +19,26 @@ export function evaluarConfirmacion(respuesta, { monto, buyOrder }) {
   if (Number(respuesta.amount) !== Number(monto) || respuesta.buy_order !== buyOrder) return 'no_coincide';
   return 'aprobado';
 }
+
+// Qué pasó en Webpay según los datos con que vuelve el navegador (HU-73):
+//   normal            token_ws                          el cliente terminó el formulario: hay que confirmar (commit)
+//   anulado           TBK_TOKEN (+ orden y sesión)      el cliente apretó "Anular compra" en Webpay
+//   error_formulario  token_ws y TBK_TOKEN              hubo un error en el formulario y el cliente volvió al sitio
+//   tiempo            solo TBK_ORDEN_COMPRA y sesión    se acabó el tiempo del formulario
+export function tipoRetorno(datos = {}) {
+  const tokenWs = datos.token_ws ? String(datos.token_ws) : null;
+  const tbkToken = datos.TBK_TOKEN ? String(datos.TBK_TOKEN) : null;
+  const orden = datos.TBK_ORDEN_COMPRA ? String(datos.TBK_ORDEN_COMPRA) : null;
+  if (tokenWs && tbkToken) return { tipo: 'error_formulario', token: tbkToken };
+  if (tbkToken) return { tipo: 'anulado', token: tbkToken };
+  if (tokenWs) return { tipo: 'normal', token: tokenWs };
+  if (orden) return { tipo: 'tiempo', orden };
+  return { tipo: 'desconocido' };
+}
+
+// Estado del intento y resultado que ve el cliente cuando no hubo commit.
+export const SIN_COMMIT = {
+  anulado: { estado: 'Anulado', resultado: 'anulado' },
+  error_formulario: { estado: 'Abortado', resultado: 'abortado' },
+  tiempo: { estado: 'Abortado', resultado: 'tiempo' },
+};

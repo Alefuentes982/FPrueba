@@ -1,13 +1,14 @@
-// Pago de los pedidos web con Webpay Plus (HU-72). Cada intento queda en transaccion_pago con su orden de compra
+// Pago de los pedidos web con Webpay Plus (HU-72) y pagos rechazados, anulados o abandonados (HU-73). Cada intento queda en transaccion_pago con su orden de compra
 // (buy_order), el token de Webpay, el monto y su estado: Pendiente al ir a Webpay; Aprobado o Rechazado al volver.
-// El pedido pasa a "Pagado" solo si Transbank autorizó el cargo y el monto y la orden coinciden.
+// El pedido pasa a "Pagado" solo si Transbank autorizó el cargo y el monto y la orden coinciden. Si no, el intento
+// queda Rechazado, Anulado o Abortado y el pedido sigue en "Pago pendiente" (se puede reintentar) o vence a los 20 min.
 // La confirmación es idempotente: si el navegador vuelve dos veces (recarga, doble clic), el segundo regreso solo
 // informa el resultado guardado, sin volver a confirmar ni duplicar el pago.
 import { HttpError, notFound } from '../../core/errors.js';
 import { urlPublica } from '../../core/urls.js';
 import { bloquearPedido, codigoPedido, ESTADO, estadoPedidoId, stockReservado } from '../pedidos/servicio.js';
 import { minutosRestantes } from './reglasPedido.js';
-import { evaluarConfirmacion, MINUTOS_MINIMOS_PAGO, ordenDeCompra } from './reglasPago.js';
+import { evaluarConfirmacion, MINUTOS_MINIMOS_PAGO, ordenDeCompra, SIN_COMMIT, tipoRetorno } from './reglasPago.js';
 import { confirmarTransaccion, crearTransaccion, estadoTransaccion } from './webpay.js';
 
 const RETORNO = '/api/tienda/pagos/webpay/retorno';
@@ -95,14 +96,26 @@ async function confirmar(db, tx) {
   return 'rechazado';
 }
 
+const RESULTADO_TIEMPO = 'tiempo';
+
 // Regreso desde Webpay (llega del navegador, sin sesión). Devuelve { pedidoId, resultado }.
 export async function procesarRetorno(db, datos) {
-  const tokenWs = datos.token_ws ? String(datos.token_ws) : null;
-  if (!tokenWs) return { pedidoId: null, resultado: 'error' };
-  const tx = await bloquearIntento(db, 'token_inicio', tokenWs);
+  const r = tipoRetorno(datos);
+  if (r.tipo === 'desconocido') return { pedidoId: null, resultado: 'error' };
+  const tx = r.tipo === 'tiempo' ? await bloquearIntento(db, 'buy_order', r.orden) : await bloquearIntento(db, 'token_inicio', r.token);
   if (!tx) return { pedidoId: null, resultado: 'error' };
-  if (tx.estado !== 'Pendiente') return { pedidoId: tx.pedido_id, resultado: RESULTADO_GUARDADO[tx.estado] ?? 'error' };
-  return { pedidoId: tx.pedido_id, resultado: await confirmar(db, tx) };
+  if (tx.estado !== 'Pendiente') {
+    const guardado = RESULTADO_GUARDADO[tx.estado] ?? 'error';
+    return { pedidoId: tx.pedido_id, resultado: r.tipo === 'tiempo' && guardado === 'abortado' ? RESULTADO_TIEMPO : guardado };
+  }
+  if (r.tipo === 'normal') return { pedidoId: tx.pedido_id, resultado: await confirmar(db, tx) };
+
+  // Sin commit: Transbank no hace el cargo. Se registra cómo terminó el intento.
+  const { estado, resultado } = SIN_COMMIT[r.tipo];
+  await db.query('UPDATE transaccion_pago SET estado_transaccion_id = $1 WHERE id = $2', [await estadoTx(db, estado), tx.id]);
+  const { rows } = await db.query(
+    'SELECT e.nombre AS estado FROM pedido p JOIN estado_pedido e ON e.id = p.estado_pedido_id WHERE p.id = $1', [tx.pedido_id]);
+  return { pedidoId: tx.pedido_id, resultado: rows[0].estado === ESTADO.PENDIENTE ? resultado : 'vencido' };
 }
 
 export const urlResultado = ({ pedidoId, resultado }) =>

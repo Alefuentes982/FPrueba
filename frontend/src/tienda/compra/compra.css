@@ -72,3 +72,17 @@
 .fct-pago-ok div { display: flex; flex-direction: column; gap: 2px; }
 .fct-pago-ok b { font-size: 18px; }
 @media (max-width: 760px) { .fct-webpay .fct-btn-primario { width: 100%; } }
+
+/* Pago rechazado, anulado o abandonado (HU-73) */
+.fct-pago-fallido { display: flex; gap: 14px; align-items: flex-start; background: #FDF0F0; border: 1px solid #F2C6C6; border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+.fct-pago-fallido > i { font-size: 26px; color: var(--rojo); }
+.fct-pago-fallido div { display: flex; flex-direction: column; gap: 4px; }
+.fct-pago-fallido b { font-size: 17px; }
+.fct-intentos { font-size: 14px; }
+.fct-intentos summary { cursor: pointer; color: var(--to); font-weight: 600; }
+.fct-intentos ul { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.fct-intentos li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--linea); padding-bottom: 6px; color: var(--gris); }
+.fct-intentos b { font-size: 13px; }
+.fct-intento-aprobado { color: var(--vo); }
+.fct-intento-rechazado, .fct-intento-anulado, .fct-intento-abortado { color: var(--rojo); }
+.fct-intento-pendiente { color: var(--naranjo); }

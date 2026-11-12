@@ -34,3 +34,20 @@ test('Webpay: integración usa las credenciales públicas de prueba; producción
   assert.equal(p.base, 'https://webpay3g.transbank.cl');
   assert.equal(configWebpay({ WEBPAY_URL: 'http://localhost:3200/' }).base, 'http://localhost:3200');
 });
+
+// ---- HU-73: cómo volvió el cliente desde Webpay ----
+import { SIN_COMMIT, tipoRetorno } from './reglasPago.js';
+
+test('regreso normal, anulado por el cliente, error del formulario y tiempo agotado', () => {
+  assert.deepEqual(tipoRetorno({ token_ws: 'abc' }), { tipo: 'normal', token: 'abc' });
+  assert.deepEqual(tipoRetorno({ TBK_TOKEN: 'abc', TBK_ORDEN_COMPRA: 'PED-000001-1', TBK_ID_SESION: 'x' }), { tipo: 'anulado', token: 'abc' });
+  assert.deepEqual(tipoRetorno({ token_ws: 'abc', TBK_TOKEN: 'abc', TBK_ORDEN_COMPRA: 'PED-000001-1' }), { tipo: 'error_formulario', token: 'abc' });
+  assert.deepEqual(tipoRetorno({ TBK_ORDEN_COMPRA: 'PED-000001-1', TBK_ID_SESION: 'x' }), { tipo: 'tiempo', orden: 'PED-000001-1' });
+  assert.deepEqual(tipoRetorno({}), { tipo: 'desconocido' });
+});
+
+test('sin commit el intento queda Anulado o Abortado', () => {
+  assert.deepEqual(SIN_COMMIT.anulado, { estado: 'Anulado', resultado: 'anulado' });
+  assert.equal(SIN_COMMIT.tiempo.estado, 'Abortado');
+  assert.equal(SIN_COMMIT.error_formulario.estado, 'Abortado');
+});
