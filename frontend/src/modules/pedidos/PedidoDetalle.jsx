@@ -15,6 +15,7 @@ export default function PedidoDetalle() {
   const location = useLocation();
   const { data: p, error, loading, reload } = useAsync(() => api.get(`/pedidos/${id}`), [id]);
   const catalogos = useAsync(() => api.get('/catalogos'), []);
+  const historial = useAsync(() => api.get(`/pedidos/${id}/historial`), [id]);
   const [aviso, setAviso] = useState(location.state?.aviso ?? null);
   const [actionError, setActionError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -29,6 +30,7 @@ export default function PedidoDetalle() {
       setAviso(mensaje);
       setCobrando(false);
       reload();
+      historial.reload();
     } catch (e) {
       setActionError(e);
     } finally {
@@ -99,7 +101,8 @@ export default function PedidoDetalle() {
             <Ficha filas={[
               ['Estado', <span className={`badge text-bg-${estadoPedidoClase[p.estado] ?? 'light'}`}>{p.estado}</span>],
               ['Cliente', <>{p.nombre_cliente}{p.telefono && <span className="text-muted"> · {p.telefono}</span>}</>],
-              ['Entrega', [p.direccion_pedido, p.comuna].filter(Boolean).join(', ') || '—'],
+              ['Entrega', p.tipo_entrega === 'retiro' ? `Retiro en ${p.sucursal}`
+                : [p.tipo_entrega === 'despacho' && 'Despacho a', [p.direccion_pedido, p.comuna].filter(Boolean).join(', ')].filter(Boolean).join(' ') || '—'],
               ['Sucursal', p.sucursal ?? '—'],
               ['Canal', p.canal],
               ['Creado', `${fechaHora(p.fecha)}${p.vendedor ? ` por ${p.vendedor}` : ''}`],
@@ -164,6 +167,27 @@ export default function PedidoDetalle() {
             </table>
           </div>
         )}
+      </Seccion>
+
+      <Seccion titulo="Historial de estados" icono="bi-clock-history" plano={(historial.data?.length ?? 0) > 0}>
+        {historial.error ? <ErrorAlert error={historial.error} /> : !historial.data ? <Spinner /> : historial.data.length === 0
+          ? <span className="text-muted">Sin cambios registrados.</span> : (
+            <div className="table-responsive">
+              <table className="table table-sm mb-0">
+                <thead><tr><th>Fecha</th><th>Cambio</th><th>Quién</th></tr></thead>
+                <tbody>
+                  {historial.data.map((h) => (
+                    <tr key={h.id}>
+                      <td className="text-nowrap">{fechaHora(h.fecha)}</td>
+                      <td>{h.estado_anterior ? <>{h.estado_anterior} <i className="bi bi-arrow-right mx-1" /></> : 'Creado en '}
+                        <span className={`badge text-bg-${estadoPedidoClase[h.estado] ?? 'light'}`}>{h.estado}</span></td>
+                      <td>{h.usuario ? <>{h.usuario}{h.rol && <span className="text-muted small"> · {h.rol}</span>}</> : <span className="text-muted">Automático</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
       </Seccion>
 
       {['Pagado', 'En preparación', 'Listo para retiro', 'En despacho', 'Entregado'].includes(p.estado) && (
