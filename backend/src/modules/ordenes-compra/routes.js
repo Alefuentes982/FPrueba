@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool, withTx } from '../../core/db.js';
-import { HttpError, notFound } from '../../core/errors.js';
+import { enLinea, HttpError, notFound } from '../../core/errors.js';
+import { esAdministrador, esJefeOAdmin } from '../../core/roles.js';
 import { clp, fechaDMA, formatoNumero, generarDocumentoPdf, pdfABuffer } from '../../core/documentos.js';
 import { condicionRango, rangoFechas } from '../../core/fechas.js';
 import { likeParam, listResponse, paging, uuid } from '../../core/sql.js';
+import { PARAMETRO_VIDA_UTIL, revisarVidaUtil } from './vidaUtil.js';
 
 const r = Router();
 
@@ -38,9 +40,22 @@ const recibir = z.object({
       cantidad: z.number().int().positive(),
       numero_lote: z.string().trim().max(50).nullish().transform((v) => v || null),
       fecha_vencimiento: fecha.nullish().transform((v) => v ?? null),
+      // Solo Administrador o Jefe de local: acepta un lote que vence antes de la vida útil mínima (HU-87).
+      excepcion_motivo: z.string().trim().max(300).nullish().transform((v) => v || null),
     }))
     .min(1, 'Indique al menos una línea a recibir.'),
 });
+const parametroVidaUtil = z.object({ meses: z.number().int('Use meses enteros.').min(0, 'Mínimo 0 meses.').max(24, 'Máximo 24 meses.') });
+
+// Plazo de vida útil vigente y fecha mínima de vencimiento para una recepción hecha hoy (en Chile).
+async function vidaUtil(db) {
+  const { rows } = await db.query(
+    `SELECT p.valor AS meses, to_char(((NOW() AT TIME ZONE 'America/Santiago')::date + make_interval(months => p.valor))::date, 'YYYY-MM-DD') AS fecha_minima,
+            p.actualizado_en, u.nombre AS actualizado_por
+       FROM parametro p LEFT JOIN usuario u ON u.id = p.actualizado_por WHERE p.clave = $1`, [PARAMETRO_VIDA_UTIL]);
+  if (!rows[0]) throw new HttpError(500, 'Falta el parámetro de vida útil mínima. Ejecute db/migraciones/015_vida_util_minima.sql.');
+  return rows[0];
+}
 
 async function estadoId(db, nombre) {
   const { rows } = await db.query('SELECT id FROM estado_orden_compra WHERE nombre = $1', [nombre]);
@@ -117,6 +132,16 @@ r.get('/', async (req, res) => {
   res.json(listResponse(rows.map((o) => ({ ...o, codigo: codigo(o.numero) })), { page, limit }));
 });
 
+// Vida útil mínima de los lotes que se reciben (HU-87). La lee quien recibe; la cambia solo el Administrador.
+r.get('/parametros/vida-util', async (_req, res) => res.json(await vidaUtil(pool)));
+r.put('/parametros/vida-util', async (req, res) => {
+  if (!esAdministrador(req.user)) throw new HttpError(403, 'Solo el Administrador cambia la vida útil mínima.');
+  const { meses } = parametroVidaUtil.parse(req.body);
+  await pool.query('UPDATE parametro SET valor = $1, actualizado_en = NOW(), actualizado_por = $2 WHERE clave = $3',
+    [meses, req.usuarioId, PARAMETRO_VIDA_UTIL]);
+  res.json(await vidaUtil(pool));
+});
+
 r.get('/:id', async (req, res) => res.json(await getOrden(pool, req.params.id)));
 
 r.post('/', async (req, res) => {
@@ -177,29 +202,39 @@ r.post('/:id/recibir', async (req, res) => {
     if (!motivo.rows[0]) throw new HttpError(500, 'Falta el motivo de movimiento "Recepción OC".');
 
     const detalles = await db.query(
-      `SELECT d.id, d.producto_id, d.cantidad_solicitada, d.cantidad_recibida, p.requiere_lote
+      `SELECT d.id, d.producto_id, d.cantidad_solicitada, d.cantidad_recibida, p.requiere_lote, p.nombre AS producto
          FROM orden_compra_detalle d JOIN producto p ON p.id = d.producto_id
         WHERE d.orden_compra_id = $1`, [req.params.id]);
     const porId = new Map(detalles.rows.map((x) => [x.id, x]));
     const vistos = new Set();
 
-    for (const it of d.items) {
+    // Vida útil mínima (HU-87): se informan todas las líneas que no cumplen, cada una con su campo.
+    const { meses, fecha_minima: minima } = await vidaUtil(db);
+    const errores = revisarVidaUtil(d.items, { detalles: porId, minima, meses: Number(meses), puedeExceptuar: esJefeOAdmin(req.user) });
+    if (errores.length) {
+      throw new HttpError(400, errores.length === 1 ? errores[0].message : `${errores.length} líneas no cumplen la vida útil mínima.`, errores);
+    }
+
+    for (const [i, it] of d.items.entries()) {
       const det = porId.get(it.detalle_id);
       if (!det) throw new HttpError(400, 'Una de las líneas no pertenece a esta orden.');
       if (vistos.has(it.detalle_id)) throw new HttpError(400, 'Línea repetida en la recepción.');
       vistos.add(it.detalle_id);
       const pendiente = det.cantidad_solicitada - det.cantidad_recibida;
       if (it.cantidad > pendiente) {
-        throw new HttpError(400, `La cantidad a recibir (${it.cantidad}) supera lo pendiente (${pendiente}).`);
+        const msg = `"${det.producto}": la cantidad a recibir (${it.cantidad}) supera lo pendiente (${pendiente}).`;
+        throw new HttpError(400, msg, [{ path: `items.${i}.cantidad`, message: msg }]);
       }
       // Sin lote exigido se genera uno técnico: la restricción única (producto, sucursal, lote) no admite dos NULL.
       const numeroLote = it.numero_lote ?? (det.requiere_lote ? null
         : `OC-${req.params.id.slice(0, 8)}-${Date.now().toString(36)}`);
 
-      const lote = await db.query(
-        `INSERT INTO lote (numero_lote, fecha_vencimiento, cantidad_recibida, producto_id, sucursal_id, orden_compra_detalle_id)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [numeroLote, it.fecha_vencimiento, it.cantidad, det.producto_id, oc[0].sucursal_id, det.id]);
+      // Si la base rechaza la línea (restricción con nombre, HU-88), el error dice cuál línea y qué campo.
+      const lote = await enLinea(`items.${i}.`, () => db.query(
+        `INSERT INTO lote (numero_lote, fecha_vencimiento, cantidad_recibida, producto_id, sucursal_id, orden_compra_detalle_id, excepcion_vida_util)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [numeroLote, it.fecha_vencimiento, it.cantidad, det.producto_id, oc[0].sucursal_id, det.id,
+          it.fecha_vencimiento && it.fecha_vencimiento < minima ? it.excepcion_motivo : null]));
       await db.query(
         `INSERT INTO movimiento_inventario (producto_id, sucursal_id, cantidad, motivo_movimiento_id, lote_id, usuario_id, orden_compra_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
