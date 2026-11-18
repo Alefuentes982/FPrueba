@@ -1,5 +1,6 @@
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import { CarritoProvider } from './CarritoContext.jsx';
+import { ComunaDespachoProvider } from './ComunaDespacho.jsx';
 import Carrito from './Carrito.jsx';
 import Catalogo from './Catalogo.jsx';
 import Checkout from './compra/Checkout.jsx';
@@ -21,6 +22,7 @@ import './tienda.css';
 // Comparte la API y la base con el sistema del personal, pero solo usa los endpoints públicos /api/tienda.
 // Cada página entra con un fundido corto (HU-95). Los paneles, modales y avisos se dibujan en .fct-capas.
 // La cuenta de cliente (HU-68) tiene su propia sesión, separada de la del personal. El checkout (HU-71) la exige.
+// La comuna de despacho (HU-78) se elige en la barra superior y la usan la ficha, el carro y el checkout.
 export default function TiendaApp() {
   const { pathname } = useLocation();
   return (
@@ -28,6 +30,7 @@ export default function TiendaApp() {
       <CuentaProvider>
         <CarritoProvider>
           <NotificacionesProvider>
+           <ComunaDespachoProvider>
             <div className="fct">
               <Encabezado />
               <main className="fct-contenido">
@@ -53,6 +56,7 @@ export default function TiendaApp() {
                 <ZonaNotificaciones />
               </div>
             </div>
+           </ComunaDespachoProvider>
           </NotificacionesProvider>
         </CarritoProvider>
       </CuentaProvider>

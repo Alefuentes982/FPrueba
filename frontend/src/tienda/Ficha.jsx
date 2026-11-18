@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { money } from '../format.js';
 import { tiendaApi } from './apiTienda.js';
 import { FUNCIONES } from './contenido.js';
+import { textoCosto, useComunaDespacho } from './ComunaDespacho.jsx';
 import Comprar from './Comprar.jsx';
 import { Aviso, EtiquetaDescuento, ImagenProducto, Migas } from './comunes.jsx';
 import { enlaceCategoria } from './DatosTienda.jsx';
@@ -63,7 +64,7 @@ export default function Ficha() {
           </div>
           <div className="fct-sellos">
             {!producto.agotado && <span><i className="bi bi-shop" aria-hidden="true" />Retiro en farmacia</span>}
-            {FUNCIONES.despacho && !producto.agotado && <span><i className="bi bi-truck" aria-hidden="true" />Despacho a domicilio</span>}
+            {FUNCIONES.despacho && !producto.agotado && <SelloDespacho />}
           </div>
 
           <div className="fct-ficha-precio">
@@ -157,5 +158,16 @@ function Relacionados({ producto }) {
       </div>
       <div className="fct-grilla fct-grilla-5">{lista.map((p) => <TarjetaProducto key={p.id} producto={p} />)}</div>
     </section>
+  );
+}
+
+// Despacho a la comuna elegida en la barra superior (HU-78). Sin comuna, invita a elegirla.
+function SelloDespacho() {
+  const { comuna, abrirSelector } = useComunaDespacho();
+  return (
+    <button type="button" className="fct-sello-boton" onClick={abrirSelector} aria-haspopup="dialog">
+      <i className="bi bi-truck" aria-hidden="true" />
+      {comuna ? `Despacho a ${comuna.nombre}: ${textoCosto(comuna)}` : 'Despacho a domicilio · ver costo'}
+    </button>
   );
 }

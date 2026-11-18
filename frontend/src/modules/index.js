@@ -9,12 +9,13 @@ import productos from './productos/index.jsx';
 import ordenesCompra from './ordenes-compra/index.jsx';
 import inventario from './inventario/index.jsx';
 import pedidos from './pedidos/index.jsx';
+import despacho from './despacho/index.jsx';
 import pos from './pos/index.jsx';
 import devoluciones from './devoluciones/index.jsx';
 import cuadratura from './cuadratura/index.jsx';
 import dashboard from './dashboard/index.jsx';
 
-const modulos = [usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones, cuadratura, dashboard];
+const modulos = [usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, despacho, pos, devoluciones, cuadratura, dashboard];
 modulos.forEach((m) => registrarExtensiones(m.nombre, m.extensiones));
 
 export default modulos;

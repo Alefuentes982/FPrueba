@@ -28,13 +28,24 @@ export async function sucursalesWeb(db) {
 }
 
 // Regiones con sus comunas, para los formularios de la cuenta y del despacho. Solo regiones que tienen comunas cargadas.
+// Cada comuna trae su costo de despacho (HU-78): null si no se despacha a ella.
 export async function listarComunas(db) {
   const { rows } = await db.query(
-    `SELECT r.id, r.nombre, json_agg(json_build_object('id', c.id, 'nombre', c.nombre) ORDER BY c.nombre) AS comunas
+    `SELECT r.id, r.nombre,
+            json_agg(json_build_object('id', c.id, 'nombre', c.nombre,
+                                       'costo_despacho', CASE WHEN cd.activo THEN cd.costo END) ORDER BY c.nombre) AS comunas
        FROM region r JOIN comuna c ON c.region_id = r.id
+       LEFT JOIN costo_despacho cd ON cd.comuna_id = c.id
       GROUP BY r.id, r.nombre
       ORDER BY r.nombre`);
-  return rows;
+  return rows.map((r) => ({ ...r, comunas: r.comunas.map((c) => ({ ...c, costo_despacho: c.costo_despacho == null ? null : Number(c.costo_despacho) })) }));
+}
+
+// Costo de despacho vigente a una comuna (HU-78). null si no se despacha a ella.
+export async function costoDespacho(db, comunaId) {
+  if (!comunaId) return null;
+  const { rows } = await db.query('SELECT costo FROM costo_despacho WHERE comuna_id = $1 AND activo', [comunaId]);
+  return rows[0] ? Number(rows[0].costo) : null;
 }
 
 // Unidades vendidas por producto en los últimos 90 días (orden "Más vendidos"). No cuenta pedidos sin pagar,

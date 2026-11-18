@@ -154,8 +154,8 @@ function DetallePedido({ id }) {
           <h2>Total</h2>
           <div className="fct-fila"><span>Productos</span><b>{money(p.subtotal_bruto)}</b></div>
           {p.descuento_total > 0 && <div className="fct-fila fct-fila-descuento"><span>Descuentos</span><b>-{money(p.descuento_total)}</b></div>}
-          <div className="fct-fila"><span>{p.entrega === 'despacho' ? 'Despacho' : 'Retiro'}</span><b>Gratis</b></div>
-          <div className="fct-total"><span>Total</span><b>{money(p.total)}</b></div>
+          <div className="fct-fila"><span>{p.entrega === 'despacho' ? 'Despacho' : 'Retiro'}</span><b>{p.costo_despacho > 0 ? money(p.costo_despacho) : 'Gratis'}</b></div>
+          <div className="fct-total"><span>Total</span><b>{money(p.total_a_pagar ?? p.total)}</b></div>
           <p className="fct-nota">IVA incluido ({money(p.iva)}).</p>
           {p.puede_cancelar && (
             <button type="button" className="fct-btn-borde fct-ancho-completo" onClick={() => setConfirmarAnular(true)}>Anular pedido</button>
