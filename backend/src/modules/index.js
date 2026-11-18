@@ -13,10 +13,11 @@ import productos from './productos/index.js';
 import ordenesCompra from './ordenes-compra/index.js';
 import inventario from './inventario/index.js';
 import pedidos from './pedidos/index.js';
+import despacho from './despacho/index.js';
 import pos from './pos/index.js';
 import devoluciones from './devoluciones/index.js';
 import cuadratura from './cuadratura/index.js';
 import dashboard from './dashboard/index.js';
 import tienda from './tienda/index.js';
 
-export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, pos, devoluciones, cuadratura, dashboard, tienda];
+export default [auth, usuarios, proveedores, productos, ordenesCompra, inventario, pedidos, despacho, pos, devoluciones, cuadratura, dashboard, tienda];

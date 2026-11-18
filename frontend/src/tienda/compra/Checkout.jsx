@@ -6,7 +6,8 @@ import { useCarrito } from '../CarritoContext.jsx';
 import { Aviso, Cargando, ImagenProducto } from '../comunes.jsx';
 import { FARMACIA } from '../contenido.js';
 import { useCuenta } from '../CuentaContext.jsx';
-import { Campo, erroresPorCampo, SelectorComuna } from '../cuenta/Campos.jsx';
+import { Campo, erroresPorCampo, SelectorComuna, useComunas } from '../cuenta/Campos.jsx';
+import { useComunaDespacho } from '../ComunaDespacho.jsx';
 import PanelLateral from '../ui/PanelLateral.jsx';
 import { useNotificar } from '../ui/Notificaciones.jsx';
 import { Pasos } from './Pasos.jsx';
@@ -37,6 +38,8 @@ function FormularioCheckout({ items }) {
   const [comunaId, setComunaId] = useState('');
   const [telefono, setTelefono] = useState('');
   const [verProductos, setVerProductos] = useState(false);
+  const regiones = useComunas();
+  const { comuna: comunaElegida } = useComunaDespacho();
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -62,6 +65,15 @@ function FormularioCheckout({ items }) {
   const c = opciones.cotizacion;
   const ningunaRetiro = !opciones.retiro.some((s) => s.alcanza);
   const campos = erroresPorCampo(error);
+  // Costo del despacho a la comuna elegida (HU-78): de la lista de comunas; el servidor lo vuelve a calcular.
+  const comunaDespacho = regiones.flatMap((r) => r.comunas).find((x) => x.id === comunaId) ?? null;
+  const costoDespacho = entrega === 'despacho' ? (comunaDespacho?.costo_despacho ?? null) : 0;
+  const sinDespachoComuna = entrega === 'despacho' && comunaDespacho && comunaDespacho.costo_despacho == null;
+  const totalPagar = c.total + (costoDespacho ?? 0);
+  const desde = (() => {
+    const costos = regiones.flatMap((r) => r.comunas).map((x) => x.costo_despacho).filter((x) => x != null);
+    return costos.length ? Math.min(...costos) : null;
+  })();
 
   const confirmar = async (e) => {
     e.preventDefault();
@@ -100,9 +112,11 @@ function FormularioCheckout({ items }) {
                 <span><b>Retiro en farmacia</b><small>Sin costo{FARMACIA.horaCorteRetiro ? ` · el mismo día si pagas antes de las ${FARMACIA.horaCorteRetiro}` : ''}</small></span>
               </label>
               <label className={`${entrega === 'despacho' ? 'activo' : ''}${opciones.despacho.disponible ? '' : ' deshabilitado'}`}>
-                <input type="radio" name="entrega" value="despacho" checked={entrega === 'despacho'} disabled={!opciones.despacho.disponible} onChange={() => setEntrega('despacho')} />
+                <input type="radio" name="entrega" value="despacho" checked={entrega === 'despacho'} disabled={!opciones.despacho.disponible}
+                  onChange={() => { setEntrega('despacho'); if (!comunaId && comunaElegida) setComunaId(comunaElegida.id); }} />
                 <i className="bi bi-truck" aria-hidden="true" />
-                <span><b>Despacho a domicilio</b><small>{opciones.despacho.disponible ? 'Sin costo por ahora' : 'Ninguna farmacia tiene todo tu pedido junto'}</small></span>
+                <span><b>Despacho a domicilio</b><small>{!opciones.despacho.disponible ? 'Ninguna farmacia tiene todo tu pedido junto'
+                  : desde != null ? `Desde ${money(desde)} según tu comuna` : 'Según tu comuna'}</small></span>
               </label>
             </div>
 
@@ -128,7 +142,11 @@ function FormularioCheckout({ items }) {
                 <Campo etiqueta="Dirección de despacho" error={campos.direccion} className="fct-ancho" ayuda={`Despacha ${opciones.despacho.sucursal}.`}>
                   {(a) => <input {...a} autoComplete="street-address" value={direccion} onChange={(e) => setDireccion(e.target.value)} maxLength={200} />}
                 </Campo>
-                <SelectorComuna comunaId={comunaId} onCambiar={setComunaId} error={campos.comuna_id} />
+                <SelectorComuna comunaId={comunaId} onCambiar={setComunaId}
+                  error={campos.comuna_id || (sinDespachoComuna ? 'Todavía no despachamos a esta comuna. Elige retiro en farmacia.' : null)} />
+                {comunaDespacho?.costo_despacho != null && (
+                  <p className="fct-ancho fct-ok"><i className="bi bi-truck" aria-hidden="true" />Despacho a {comunaDespacho.nombre}: {money(comunaDespacho.costo_despacho)}</p>
+                )}
               </div>
             )}
           </section>
@@ -152,10 +170,12 @@ function FormularioCheckout({ items }) {
           </button>
           <div className="fct-fila"><span>Productos</span><b>{money(c.subtotal_bruto)}</b></div>
           {c.descuento_total > 0 && <div className="fct-fila fct-fila-descuento"><span>Descuentos</span><b>-{money(c.descuento_total)}</b></div>}
-          <div className="fct-fila"><span>{entrega === 'retiro' ? 'Retiro en farmacia' : 'Despacho'}</span><b>Gratis</b></div>
-          <div className="fct-total"><span>Total</span><b>{money(c.total)}</b></div>
+          <div className="fct-fila"><span>{entrega === 'retiro' ? 'Retiro en farmacia' : 'Despacho'}</span>
+            <b>{entrega === 'retiro' || costoDespacho === 0 ? 'Gratis' : costoDespacho == null ? 'Elige la comuna' : money(costoDespacho)}</b></div>
+          <div className="fct-total"><span>Total</span><b>{money(totalPagar)}</b></div>
           <p className="fct-nota">IVA incluido ({money(c.iva)}). Reservamos tus productos por {opciones.reserva_minutos} minutos mientras pagas.</p>
-          <button type="submit" className="fct-btn-primario" disabled={enviando || !c.puede_continuar || (entrega === 'retiro' && !sucursalId)}>
+          <button type="submit" className="fct-btn-primario"
+            disabled={enviando || !c.puede_continuar || (entrega === 'retiro' && !sucursalId) || (entrega === 'despacho' && costoDespacho == null)}>
             {enviando ? 'Reservando…' : 'Reservar y continuar al pago'}
           </button>
           <Link to="/tienda/carrito" className="fct-seguir">Volver al carro</Link>

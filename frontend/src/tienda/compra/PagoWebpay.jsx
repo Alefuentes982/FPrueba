@@ -36,7 +36,7 @@ export default function PagoWebpay({ pedido, onError, texto = 'Pagar con Webpay'
         <small>Te llevamos a Webpay de Transbank. FarmaClick no recibe ni guarda los datos de tu tarjeta.</small>
       </div>
       <button type="button" className="fct-btn-primario" onClick={pagar} disabled={yendo}>
-        {yendo ? 'Abriendo Webpay…' : `${texto} ${money(pedido.total)}`}
+        {yendo ? 'Abriendo Webpay…' : `${texto} ${money(pedido.total_a_pagar ?? pedido.total)}`}
       </button>
     </div>
   );

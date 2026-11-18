@@ -37,6 +37,7 @@ export async function comprobantePedido(db, id) {
       ['Subtotal', clp(p.subtotal_bruto)],
       ...(p.descuento_total ? [['Descuentos', `-${clp(p.descuento_total)}`]] : []),
       ['Neto', clp(p.subtotal_neto)], ['IVA 19%', clp(p.iva)], ['Total', clp(p.total)],
+      ...(Number(p.costo_despacho) ? [['Despacho', clp(p.costo_despacho)], ['Total a pagar', clp(p.total_a_pagar)]] : []),
       ...(redondeo ? [['Ajuste por redondeo (Ley 20.956)', `${redondeo < 0 ? '-' : '+'}${clp(Math.abs(redondeo))}`], ['Total pagado', clp(Number(p.total) + redondeo)]] : []),
     ],
     nota: notaPagos(pagado),
@@ -61,7 +62,7 @@ export async function enviarComprobantePedido(db, id, correo) {
   const { archivo, base64 } = await comprobantePedido(db, id);
   const { texto, html } = cuerpoComprobante({
     nombre: p.nombre_cliente, documento: 'comprobante de su compra', codigo: p.codigo,
-    detalle: `total ${clp(Number(p.total) + Number(p.redondeo ?? 0))}`,
+    detalle: `total ${clp(Number(p.total_a_pagar) + Number(p.redondeo ?? 0))}`,
   });
   await enviarCorreo({
     para: correo, asunto: `Comprobante ${p.codigo} · ${process.env.EMPRESA_NOMBRE || 'FarmaClick'}`, texto, html,

@@ -23,7 +23,7 @@ const estadoTx = (db, nombre) => idDe(db, 'estado_transaccion', nombre);
 // Empieza un intento de pago. Devuelve { url, token } para enviar el navegador a Webpay.
 export async function iniciarPago(db, clienteId, pedidoId) {
   const p = await bloquearPedido(db, pedidoId);
-  const { rows: dueno } = await db.query('SELECT cliente_id, fecha FROM pedido WHERE id = $1', [pedidoId]);
+  const { rows: dueno } = await db.query('SELECT cliente_id, fecha, costo_despacho FROM pedido WHERE id = $1', [pedidoId]);
   if (dueno[0].cliente_id !== clienteId || p.canal !== 'Online') throw notFound('Pedido');
   if (p.estado !== ESTADO.PENDIENTE) throw new HttpError(409, `Este pedido está "${p.estado}": ya no se puede pagar.`);
   if (!(await stockReservado(db, pedidoId))) throw new HttpError(409, 'El pedido ya no tiene productos reservados. Vuelve a comprar desde el carro.');
@@ -38,7 +38,8 @@ export async function iniciarPago(db, clienteId, pedidoId) {
     [await estadoTx(db, 'Abortado'), pedidoId, pendiente]);
   const { rows: n } = await db.query('SELECT COUNT(*)::int AS n FROM transaccion_pago WHERE pedido_id = $1 AND pasarela_id IS NOT NULL', [pedidoId]);
   const buyOrder = ordenDeCompra(codigoPedido(p.numero), n[0].n + 1);
-  const monto = Math.round(Number(p.total));
+  // Se paga lo de los productos más el despacho (HU-78), ambos calculados por el servidor.
+  const monto = Math.round(Number(p.total) + Number(dueno[0].costo_despacho));
 
   const { token, url } = await crearTransaccion({ buyOrder, sessionId: pedidoId, monto, urlRetorno: urlPublica(RETORNO) });
   await db.query(
