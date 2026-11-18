@@ -37,6 +37,13 @@ export const registroSchema = z.object({
   password: contrasena,
 });
 
+// Datos que el cliente puede cambiar en Mi cuenta (HU-69). El nombre, el correo y el RUT no se cambian desde la tienda.
+export const datosClienteSchema = z.object({
+  telefono,
+  direccion: z.string().trim().min(5, 'Escribe tu dirección (calle, número y depto. si corresponde).').max(200),
+  comuna_id: z.string().uuid('Elige tu comuna.'),
+});
+
 export const ingresoSchema = z.object({ correo, password: z.string().min(1, 'Escribe tu contraseña.') });
 export const correoSchema = z.object({ correo });
 export const nuevaClaveSchema = z.object({ access_token: z.string().min(10), password: contrasena });

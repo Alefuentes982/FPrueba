@@ -4,7 +4,7 @@ import { cuentaApi } from '../apiTienda.js';
 import { Aviso, Cargando } from '../comunes.jsx';
 import { primerNombre, useCuenta } from '../CuentaContext.jsx';
 import { useNotificar } from '../ui/Notificaciones.jsx';
-import { Campo, CampoClave, erroresPorCampo } from './Campos.jsx';
+import { Campo, CampoClave, erroresPorCampo, SelectorComuna } from './Campos.jsx';
 import './cuenta.css';
 
 // Solo se vuelve a páginas de la tienda (evita redirecciones a otros sitios).
@@ -100,6 +100,7 @@ function Ingreso() {
 function MiCuenta({ cliente }) {
   const { salir } = useCuenta();
   const navigate = useNavigate();
+  const [editando, setEditando] = useState(false);
   const datos = [
     ['Nombre', cliente.nombre],
     ['Correo', cliente.correo],
@@ -111,11 +112,18 @@ function MiCuenta({ cliente }) {
     <div className="fct-wrap fct-pagina">
       <div className="fct-cuenta-caja fct-cuenta-ancha">
         <h1>Hola, {primerNombre(cliente)}</h1>
-        <p className="fct-suave">Estos son los datos de tu cuenta. Usamos tu RUT para entregarte los pedidos que retires en la farmacia.</p>
-        <dl className="fct-datos">
-          {datos.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v || '—'}</dd></div>)}
-        </dl>
-        <p className="fct-nota">Pronto podrás editar tus datos y ver tus pedidos desde aquí.</p>
+        {editando ? <EditarDatos cliente={cliente} onListo={() => setEditando(false)} /> : (
+          <>
+            <p className="fct-suave">Estos son los datos de tu cuenta. Usamos tu RUT para entregarte los pedidos que retires en la farmacia.</p>
+            <dl className="fct-datos">
+              {datos.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v || '—'}</dd></div>)}
+            </dl>
+            <button type="button" className="fct-btn-borde fct-editar-datos" onClick={() => setEditando(true)}>
+              <i className="bi bi-pencil" aria-hidden="true" />&nbsp;Editar teléfono y dirección
+            </button>
+            <p className="fct-nota">El nombre, el correo y el RUT no se cambian desde la tienda. Si hay un error, escríbenos.</p>
+          </>
+        )}
         <div className="fct-cuenta-acciones">
           <Link to="/tienda/productos" className="fct-btn-primario">Seguir comprando</Link>
           <button type="button" className="fct-btn-borde" onClick={() => { salir(); navigate('/tienda'); }}>
@@ -124,5 +132,48 @@ function MiCuenta({ cliente }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Formulario de Mi cuenta (HU-69): teléfono, región, comuna y dirección. El checkout los usa como datos por defecto.
+function EditarDatos({ cliente, onListo }) {
+  const { actualizar } = useCuenta();
+  const notificar = useNotificar();
+  const [telefono, setTelefono] = useState((cliente.telefono ?? '').replace(/^\+56/, ''));
+  const [direccion, setDireccion] = useState(cliente.direccion ?? '');
+  const [comunaId, setComunaId] = useState(cliente.comuna_id ?? '');
+  const [error, setError] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    setGuardando(true); setError(null);
+    try {
+      await actualizar({ telefono, direccion, comuna_id: comunaId });
+      notificar({ titulo: 'Datos guardados', texto: 'Los usaremos en tus próximas compras.', icono: 'bi-check-circle-fill' });
+      onListo();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const campos = erroresPorCampo(error);
+  return (
+    <form onSubmit={guardar} className="fct-form fct-form-2" noValidate aria-label="Editar mis datos">
+      {error && !error.details && <div className="fct-ancho"><Aviso error={error} /></div>}
+      <Campo etiqueta="Teléfono" error={campos.telefono} ayuda="9 dígitos, por ejemplo 9 1234 5678">
+        {(a) => <input {...a} type="tel" autoComplete="tel-national" value={telefono} onChange={(e) => setTelefono(e.target.value)} maxLength={16} />}
+      </Campo>
+      <Campo etiqueta="Dirección de despacho" error={campos.direccion} className="fct-ancho">
+        {(a) => <input {...a} autoComplete="street-address" value={direccion} onChange={(e) => setDireccion(e.target.value)} maxLength={200} />}
+      </Campo>
+      <SelectorComuna comunaId={comunaId} onCambiar={setComunaId} error={campos.comuna_id} />
+      <div className="fct-ancho fct-cuenta-acciones">
+        <button type="submit" className="fct-btn-primario" disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar cambios'}</button>
+        <button type="button" className="fct-btn-borde" onClick={onListo} disabled={guardando}>Cancelar</button>
+      </div>
+    </form>
   );
 }
