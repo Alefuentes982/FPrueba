@@ -43,7 +43,15 @@ export function CuentaProvider({ children }) {
 
   const salir = useCallback(() => { borrarSesionCliente(); setCliente(null); }, []);
 
-  const valor = useMemo(() => ({ cliente, cargando, ingresar, iniciar, salir }), [cliente, cargando, ingresar, iniciar, salir]);
+  // Mi cuenta (HU-69): guarda los datos nuevos y actualiza la sesión guardada.
+  const actualizar = useCallback(async (datos) => {
+    const c = await cuentaApi.actualizar(datos);
+    guardarSesionCliente({ ...leerSesionCliente(), cliente: c });
+    setCliente(c);
+    return c;
+  }, []);
+
+  const valor = useMemo(() => ({ cliente, cargando, ingresar, iniciar, salir, actualizar }), [cliente, cargando, ingresar, iniciar, salir, actualizar]);
   return <CuentaContext.Provider value={valor}>{children}</CuentaContext.Provider>;
 }
 

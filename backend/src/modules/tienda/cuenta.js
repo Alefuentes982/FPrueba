@@ -10,7 +10,7 @@ import { pool, withTx } from '../../core/db.js';
 import { HttpError } from '../../core/errors.js';
 import { supabaseAdmin, supabaseAnon } from '../../core/supabase.js';
 import { urlPublica } from '../../core/urls.js';
-import { correoSchema, ingresoSchema, nuevaClaveSchema, refreshSchema, registroSchema } from './esquemasCuenta.js';
+import { correoSchema, datosClienteSchema, ingresoSchema, nuevaClaveSchema, refreshSchema, registroSchema } from './esquemasCuenta.js';
 import { autenticarCliente, perfilCliente, ROL_CLIENTE } from './sesionCliente.js';
 
 const r = Router();
@@ -111,6 +111,20 @@ r.post('/nueva-clave', limite, async (req, res) => {
 });
 
 r.get('/yo', autenticarCliente, async (req, res) => {
+  res.json(await perfilCliente(pool, req.cliente.id));
+});
+
+// Mi cuenta (HU-69): el cliente cambia su teléfono y su dirección de despacho. Solo los suyos: el id sale de la sesión,
+// nunca del cuerpo de la solicitud.
+r.put('/yo', autenticarCliente, async (req, res) => {
+  const d = datosClienteSchema.parse(req.body);
+  try {
+    await pool.query('UPDATE cliente SET telefono = $1, direccion_cliente = $2, comuna_id = $3 WHERE usuario_id = $4',
+      [d.telefono, d.direccion, d.comuna_id, req.cliente.id]);
+  } catch (err) {
+    if (err.code === '23503') throw new HttpError(400, 'Elige una comuna de la lista.');
+    throw err;
+  }
   res.json(await perfilCliente(pool, req.cliente.id));
 });
 

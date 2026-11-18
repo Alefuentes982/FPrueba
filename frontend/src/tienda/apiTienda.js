@@ -62,6 +62,8 @@ export const cuentaApi = {
   recuperar: (correo) => pedir('/cuenta/recuperar', { method: 'POST', body: { correo } }),
   nuevaClave: (accessToken, password) => pedir('/cuenta/nueva-clave', { method: 'POST', body: { access_token: accessToken, password } }),
   yo: () => pedirConSesion('/cuenta/yo'),
+  // Mi cuenta (HU-69): teléfono y dirección de despacho.
+  actualizar: (datos) => pedirConSesion('/cuenta/yo', { method: 'PUT', body: datos }),
 };
 
 // Checkout y pedido web (HU-71). Solo con sesión de cliente.

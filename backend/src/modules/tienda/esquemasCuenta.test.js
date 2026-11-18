@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contrasena, ingresoSchema, normalizarTelefono, nuevaClaveSchema, registroSchema } from './esquemasCuenta.js';
+import { contrasena, datosClienteSchema, ingresoSchema, normalizarTelefono, nuevaClaveSchema, registroSchema } from './esquemasCuenta.js';
 
 const comuna = '00000000-0000-4000-8000-000000000001';
 const base = {
@@ -45,4 +45,13 @@ test('ingreso y nueva contraseña', () => {
   assert.equal(ingresoSchema.safeParse({ correo: 'ana@correo.cl', password: '' }).success, false);
   assert.equal(nuevaClaveSchema.safeParse({ access_token: 'x', password: 'clave1234' }).success, false);
   assert.equal(nuevaClaveSchema.safeParse({ access_token: 'eyJ.token.firmado', password: 'clave1234' }).success, true);
+});
+
+test('Mi cuenta (HU-69): normaliza el teléfono y exige dirección y comuna', () => {
+  const d = datosClienteSchema.parse({ telefono: '9 8765 4321', direccion: 'Pasaje Los Olmos 123', comuna_id: '7b1f6a3e-2c4d-4e5f-8a9b-0c1d2e3f4a5b' });
+  assert.equal(d.telefono, '+56987654321');
+  const r = datosClienteSchema.safeParse({ telefono: '123', direccion: 'x', comuna_id: '' });
+  assert.equal(r.success, false);
+  const campos = r.error.issues.map((i) => i.path[0]).sort();
+  assert.deepEqual(campos, ['comuna_id', 'direccion', 'telefono']);
 });
