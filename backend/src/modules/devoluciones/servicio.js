@@ -5,10 +5,12 @@
 //  - El dinero se devuelve por los mismos medios con que se pagó y sin exceder lo pagado por cada uno.
 //  - El efectivo sale de la caja del turno abierto de quien atiende (y se descuenta en el cierre de ese turno).
 //  - El stock vuelve al inventario solo si la línea lo indica, y siempre al lote de origen.
+//  - Lo pagado con Webpay Plus se devuelve con un reembolso en Transbank (HU-80); su código queda como referencia.
 import { formatoNumero } from '../../core/documentos.js';
 import { HttpError, notFound } from '../../core/errors.js';
 import { aCentavos, aPesos, pesos, redondearEfectivo } from '../../core/redondeo.js';
 import { bloquearProducto, insertarMovimiento } from '../inventario/movimientos.js';
+import { MEDIO_WEBPAY, pagoWebpay, reembolsarWebpay } from '../pedidos/reembolso.js';
 import { bloquearPedido, codigoPedido, ESTADO } from '../pedidos/servicio.js';
 import { turnoAbierto } from '../pos/turnos.js';
 
@@ -182,7 +184,9 @@ export async function crearDevolucion(db, d, ctx) {
       `INSERT INTO devolucion_detalle (devolucion_id, detalle_pedido_id, cantidad, monto_reembolso, reingresa_stock) VALUES ($1,$2,$3,$4,$5)`,
       [id, l.detalle_id, l.cantidad, l.monto_reembolso, l.reingresa_stock]);
   }
-  for (const x of d.reembolsos) {
+  const webpay = pedido.medios.find((m) => m.medio_pago === MEDIO_WEBPAY);
+  const esWebpay = (x) => webpay && x.medio_pago_id === webpay.medio_pago_id;
+  for (const x of d.reembolsos.filter((y) => !esWebpay(y))) {
     await db.query('INSERT INTO devolucion_pago (devolucion_id, medio_pago_id, monto, referencia) VALUES ($1,$2,$3,$4)',
       [id, x.medio_pago_id, x.monto, x.referencia ?? null]);
   }
@@ -191,6 +195,17 @@ export async function crearDevolucion(db, d, ctx) {
       pedidoId: d.pedido_id, productoId: l.producto_id, cantidad: l.cantidad, usuarioId: ctx.usuarioId,
       observacion: `Devolución ${codigoDevolucion(numero)}`,
     });
+  }
+  // Webpay al final (HU-80): si Transbank rechaza el reembolso, la devolución completa se deshace.
+  const montoWebpay = d.reembolsos.filter(esWebpay).reduce((s, x) => s + x.monto, 0);
+  if (montoWebpay > 0) {
+    const pago = await pagoWebpay(db, d.pedido_id);
+    if (!pago) throw new HttpError(409, 'No se encontró el pago Webpay aprobado del pedido.');
+    const r = await reembolsarWebpay(db, pago, {
+      monto: montoWebpay, motivo: `Devolución ${codigoDevolucion(numero)}: ${d.motivo}`.slice(0, 300), usuarioId: ctx.usuarioId, devolucionId: id,
+    });
+    await db.query('INSERT INTO devolucion_pago (devolucion_id, medio_pago_id, monto, referencia) VALUES ($1,$2,$3,$4)',
+      [id, webpay.medio_pago_id, montoWebpay, `Webpay ${r.tipo === 'REVERSED' ? 'reversa' : 'anulación'}${r.codigo_autorizacion ? ` ${r.codigo_autorizacion}` : ''}`]);
   }
   return id;
 }

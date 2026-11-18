@@ -8,6 +8,8 @@ import { correoSchema } from '../../core/correo.js';
 import { comprobantePedido, enviarComprobantePedido } from './comprobante.js';
 import { accionesWeb, ESTADOS_COLA, minutosDesde, revisarCambioWeb } from './cola.js';
 import { estadoSchema, pagosSchema, pedidoSchema } from './esquemas.js';
+import { anularYReembolsar, pagoWebpay, reembolsosDelPedido, revisarAnulacion } from './reembolso.js';
+import { esAdministrador } from '../../core/roles.js';
 import {
   bloquearPedido, buscarProductosVendibles, cambiarEstado, cancelarPedido, codigoPedido, crearPedido, detallePedido, expirarPendientes,
   registrarPagos, reemplazarPedido, reservarPedido,
@@ -86,10 +88,18 @@ r.get('/web', async (req, res) => {
 });
 
 // Un pedido web muestra solo el paso que sigue según su entrega (retiro o despacho).
-r.get('/:id', async (req, res) => {
-  const p = await detallePedido(pool, req.params.id);
-  res.json({ ...p, acciones: accionesWeb(p) });
-});
+// Ficha del pedido para el personal. Un pedido web muestra solo el paso que sigue según su entrega; si se pagó con
+// Webpay, "Cancelar" se reemplaza por "Anular y reembolsar" (HU-80, solo el Administrador).
+async function fichaPedido(id, user) {
+  const p = await detallePedido(pool, id);
+  const pago = await pagoWebpay(pool, id);
+  let acciones = accionesWeb(p);
+  if (pago) acciones = acciones.filter((a) => a !== 'cancelar');
+  if (pago && esAdministrador(user) && !revisarAnulacion(p, pago)) acciones = [...acciones, 'anular-reembolso'];
+  return { ...p, acciones, reembolsos: await reembolsosDelPedido(pool, id) };
+}
+
+r.get('/:id', async (req, res) => res.json(await fichaPedido(uuid.parse(req.params.id), req.user)));
 
 // Historial de estados (HU-76): quién cambió el pedido y cuándo. Sin usuario = la tienda o un proceso automático.
 r.get('/:id/historial', async (req, res) => {
@@ -146,13 +156,25 @@ r.post('/:id/estado', async (req, res) => {
     if (error) throw new HttpError(409, error);
     await cambiarEstado(db, req.params.id, estado);
   });
-  const p = await detallePedido(pool, req.params.id);
-  res.json({ ...p, acciones: accionesWeb(p) });
+  res.json(await fichaPedido(req.params.id, req.user));
 });
 
 r.post('/:id/cancelar', async (req, res) => {
-  await withTx(req.usuarioId, (db) => cancelarPedido(db, req.params.id));
-  res.json(await detallePedido(pool, req.params.id));
+  await withTx(req.usuarioId, async (db) => {
+    // Un pago con Webpay no se anula solo en el sistema: el dinero se devuelve con "Anular y reembolsar" (HU-80).
+    if (await pagoWebpay(db, req.params.id)) throw new HttpError(409, 'Este pedido se pagó con Webpay: use "Anular y reembolsar" para devolver el dinero.');
+    await cancelarPedido(db, req.params.id);
+  });
+  res.json(await fichaPedido(req.params.id, req.user));
+});
+
+// Anula un pedido web pagado y reembolsa por Webpay todo lo pagado (HU-80). Solo el Administrador.
+r.post('/:id/anular-reembolso', async (req, res) => {
+  if (!esAdministrador(req.user)) throw new HttpError(403, 'Solo el Administrador anula y reembolsa pedidos web.');
+  const { motivo } = z.object({ motivo: z.string().trim().min(5, 'Escriba el motivo (al menos 5 caracteres).').max(300) }).parse(req.body ?? {});
+  const id = uuid.parse(req.params.id);
+  const reembolso = await withTx(req.usuarioId, (db) => anularYReembolsar(db, id, { motivo, usuarioId: req.usuarioId }));
+  res.json({ ...(await fichaPedido(id, req.user)), reembolso });
 });
 
 // Envía el comprobante por correo (PDF adjunto) a la dirección indicada.

@@ -20,6 +20,8 @@ export default function PedidoDetalle() {
   const [actionError, setActionError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [cobrando, setCobrando] = useState(false);
+  const [anulando, setAnulando] = useState(false);
+  const [motivo, setMotivo] = useState('');
 
   const ejecutar = async (fn, mensaje) => {
     setActionError(null);
@@ -79,8 +81,33 @@ export default function PedidoDetalle() {
             Cancelar pedido
           </button>
         )}
+        {tiene('anular-reembolso') && (
+          <button className="btn btn-outline-danger" disabled={busy} onClick={() => { setMotivo(''); setAnulando(true); }}>
+            <i className="bi bi-arrow-counterclockwise me-1" />Anular y reembolsar
+          </button>
+        )}
         <Link to="/pedidos" className="btn btn-outline-secondary">Volver</Link>
       </PageHeader>
+
+      {anulando && (
+        <Seccion titulo="Anular y reembolsar por Webpay" icono="bi-arrow-counterclockwise" className="border-danger">
+          <p className="mb-2">
+            Se devuelven <strong>{money(p.total_a_pagar ?? p.total)}</strong> a la tarjeta del cliente por Webpay, el pedido queda
+            «Cancelado» y sus productos vuelven al inventario. No se puede deshacer.
+          </p>
+          <label htmlFor="motivo-anulacion" className="form-label">Motivo (lo verá quien revise el pedido)</label>
+          <textarea id="motivo-anulacion" className="form-control mb-2" rows="2" maxLength={300} value={motivo}
+            placeholder="Por ejemplo: sin stock del producto en la farmacia" onChange={(e) => setMotivo(e.target.value)} />
+          <div className="d-flex gap-2">
+            <button className="btn btn-danger" disabled={busy || motivo.trim().length < 5}
+              onClick={() => ejecutar(async () => { await api.post(`/pedidos/${id}/anular-reembolso`, { motivo }); setAnulando(false); },
+                `Pedido ${p.codigo} anulado y reembolsado por Webpay.`)}>
+              {busy ? 'Reembolsando…' : 'Anular y reembolsar'}
+            </button>
+            <button className="btn btn-outline-secondary" disabled={busy} onClick={() => setAnulando(false)}>Volver</button>
+          </div>
+        </Seccion>
+      )}
 
       {aviso && (
         <div className="alert alert-success d-flex justify-content-between">
@@ -116,6 +143,9 @@ export default function PedidoDetalle() {
               {p.descuento_total > 0 && <div className="text-success">Descuentos: <strong>-{money(p.descuento_total)}</strong></div>}
               <div className="text-muted small">Neto {money(p.subtotal_neto)} · IVA {money(p.iva)}</div>
               <div className="fc-total-importe">{money(p.total)}</div>
+              {Number(p.costo_despacho) > 0 && (
+                <div className="small">Despacho: <strong>{money(p.costo_despacho)}</strong> · Total pagado <strong>{money(p.total_a_pagar)}</strong></div>
+              )}
               {Number(p.redondeo) !== 0 && (
                 <div className="small">Redondeo del efectivo (Ley 20.956): <strong>{textoAjuste(Number(p.redondeo), money)}</strong>
                   <br />Total cobrado <strong>{money(Number(p.total) + Number(p.redondeo))}</strong></div>
@@ -159,7 +189,7 @@ export default function PedidoDetalle() {
                     <td>{fechaHora(x.fecha_transaccion)}</td>
                     <td>{x.medio_pago}{x.monto_recibido != null && <small className="text-muted d-block">Recibido {money(x.monto_recibido)} · vuelto {money(x.vuelto)}</small>}</td>
                     <td>{x.codigo_autorizacion ?? '—'}</td>
-                    <td><span className={`badge text-bg-${x.estado === 'Aprobado' ? 'success' : 'secondary'}`}>{x.estado}</span></td>
+                    <td><span className={`badge text-bg-${x.estado === 'Aprobado' ? 'success' : x.estado === 'Reembolsado' ? 'warning' : 'secondary'}`}>{x.estado}</span></td>
                     <td className="text-end">{money(x.monto)}</td>
                   </tr>
                 ))}
@@ -168,6 +198,28 @@ export default function PedidoDetalle() {
           </div>
         )}
       </Seccion>
+
+      {p.reembolsos?.length > 0 && (
+        <Seccion titulo="Reembolsos por Webpay" icono="bi-arrow-counterclockwise" plano>
+          <div className="table-responsive">
+            <table className="table table-sm mb-0">
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Autorización</th><th>Motivo</th><th>Quién</th><th className="text-end">Monto</th></tr></thead>
+              <tbody>
+                {p.reembolsos.map((x) => (
+                  <tr key={x.id}>
+                    <td className="text-nowrap">{fechaHora(x.fecha)}</td>
+                    <td>{x.tipo === 'REVERSED' ? 'Reversa' : 'Anulación'}</td>
+                    <td>{x.codigo_autorizacion ?? '—'}</td>
+                    <td>{x.motivo}</td>
+                    <td>{x.usuario}</td>
+                    <td className="text-end">{money(x.monto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Seccion>
+      )}
 
       <Seccion titulo="Historial de estados" icono="bi-clock-history" plano={(historial.data?.length ?? 0) > 0}>
         {historial.error ? <ErrorAlert error={historial.error} /> : !historial.data ? <Spinner /> : historial.data.length === 0
