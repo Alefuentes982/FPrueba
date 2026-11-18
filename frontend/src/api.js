@@ -10,14 +10,15 @@ export class ApiError extends Error {
   }
 }
 
-const send = (path, { method = 'GET', body } = {}, token) =>
+// archivo: un Blob que se envía tal cual, con su tipo (fotos de productos, HU-96); si no, body va como JSON.
+const send = (path, { method = 'GET', body, archivo } = {}, token) =>
   fetch(BASE + path, {
     method,
     headers: {
-      ...(body !== undefined && { 'Content-Type': 'application/json' }),
+      ...(archivo ? { 'Content-Type': archivo.type || 'application/octet-stream' } : body !== undefined && { 'Content-Type': 'application/json' }),
       ...(token && { Authorization: `Bearer ${token}` }),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: archivo ?? (body !== undefined ? JSON.stringify(body) : undefined),
   });
 
 // Una sola renovación a la vez aunque varias peticiones fallen con 401 simultáneamente.
@@ -65,4 +66,6 @@ export const api = {
   post: (p, body = {}) => request(p, { method: 'POST', body }),
   put: (p, body) => request(p, { method: 'PUT', body }),
   patch: (p, body) => request(p, { method: 'PATCH', body }),
+  delete: (p) => request(p, { method: 'DELETE' }),
+  subir: (p, archivo) => request(p, { method: 'POST', archivo }),
 };
