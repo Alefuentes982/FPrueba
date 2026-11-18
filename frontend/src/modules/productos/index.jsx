@@ -1,3 +1,4 @@
+import FotosLote from './FotosLote.jsx';
 import ProductoForm from './ProductoForm.jsx';
 import Productos from './Productos.jsx';
 import ProductosDeProveedor from './ProductosDeProveedor.jsx';
@@ -9,6 +10,7 @@ export default {
   rutas: [
     { path: '/productos', element: <Productos /> },
     { path: '/productos/nuevo', element: <ProductoForm /> },
+    { path: '/productos/fotos', element: <FotosLote /> },
     { path: '/productos/:id', element: <ProductoForm /> },
   ],
   extensiones: { 'proveedor.ficha': ProductosDeProveedor }, // sección en la ficha del proveedor

@@ -60,6 +60,9 @@ export function errorHandler(err, req, res, _next) {
       details: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
     });
   }
+  // Errores al leer el cuerpo (express.json / express.raw): tamaño y formato.
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'El archivo o los datos enviados son demasiado grandes.' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Los datos enviados no tienen un formato válido.' });
   const traducido = traducirRestriccion(err);
   if (traducido) return res.status(traducido.status).json({ error: traducido.message, details: traducido.details });
   if (err.constraint && ['23505', '23503', '23514'].includes(err.code)) {

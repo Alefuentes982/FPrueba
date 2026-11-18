@@ -48,3 +48,10 @@ test('HttpError puede llevar el detalle por campo', () => {
   assert.equal(r.codigo, 400);
   assert.equal(r.cuerpo.details.length, 1);
 });
+
+test('HU-96: un cuerpo demasiado grande da 413 con un mensaje claro', () => {
+  const r = respuesta();
+  errorHandler(Object.assign(new Error('request entity too large'), { type: 'entity.too.large', status: 413 }), {}, r);
+  assert.equal(r.codigo, 413);
+  assert.match(r.cuerpo.error, /demasiado grandes/);
+});

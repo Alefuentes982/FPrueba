@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
+import { kb, reducirFoto } from '../../fotos.js';
 import { money, percent } from '../../format.js';
 import { ErrorAlert, Field, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
 
@@ -150,15 +151,8 @@ export default function ProductoForm() {
               <textarea className="form-control" rows={3} maxLength={2000} value={form.descripcion} onChange={set('descripcion')} />
             </Field>
           </div>
-          <div className="col-md-8">
-            <Field label="Foto (dirección https)" hint="Dirección de una imagen ya publicada, por ejemplo en Supabase Storage. Vacío: la tienda muestra un dibujo.">
-              <input className="form-control" type="url" maxLength={500} placeholder="https://" value={form.imagen_url} onChange={set('imagen_url')} />
-            </Field>
-          </div>
-          <div className="col-md-4">
-            {/^https:\/\/\S+$/.test(form.imagen_url) && (
-              <img src={form.imagen_url} alt="Vista previa de la foto" className="img-thumbnail" style={{ maxHeight: 96 }} />
-            )}
+          <div className="col-12">
+            <FotoProducto id={id} url={form.imagen_url} onCambio={(url) => setForm((f) => ({ ...f, imagen_url: url ?? '' }))} />
           </div>
         </div>
 
@@ -204,5 +198,63 @@ export default function ProductoForm() {
         </div>
       </form>
     </>
+  );
+}
+
+// Foto para la tienda (HU-96): se sube desde aquí, el navegador la reduce (unos 80 KB) y la API la guarda en Supabase
+// Storage con el nombre del SKU. Sin foto, la tienda muestra un dibujo. Para cargar muchas: Productos > Fotos en lote.
+function FotoProducto({ id, url, onCambio }) {
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState(null);
+  const [info, setInfo] = useState(null);
+  const tieneFoto = /^(https:\/\/|\/api\/fotos\/)\S+$/.test(url ?? '');
+  const subir = async (e) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo) return;
+    setSubiendo(true); setError(null); setInfo(null);
+    try {
+      const reducida = await reducirFoto(archivo);
+      const p = await api.subir(`/productos/${id}/foto`, reducida);
+      onCambio(p.imagen_url);
+      setInfo(`Foto guardada (${kb(archivo.size)} → ${kb(reducida.size)}).`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setSubiendo(false);
+    }
+  };
+  const quitar = async () => {
+    setError(null); setInfo(null);
+    try {
+      const p = await api.delete(`/productos/${id}/foto`);
+      onCambio(p.imagen_url);
+      setInfo('La tienda mostrará el dibujo genérico.');
+    } catch (err) {
+      setError(err);
+    }
+  };
+  return (
+    <div className="d-flex flex-wrap align-items-center gap-3 mb-3" id="foto-producto">
+      <div className="border rounded bg-light d-flex align-items-center justify-content-center" style={{ width: 120, height: 120 }}>
+        {tieneFoto ? <img src={url} alt="Foto del producto" style={{ maxWidth: 116, maxHeight: 116, objectFit: 'contain' }} />
+          : <span className="small text-muted text-center px-2">Sin foto: la tienda muestra un dibujo</span>}
+      </div>
+      <div>
+        <div className="fw-semibold mb-1">Foto para la tienda</div>
+        {id ? (
+          <div className="d-flex flex-wrap gap-2">
+            <label className={`btn btn-outline-primary btn-sm mb-0${subiendo ? ' disabled' : ''}`}>
+              <i className="bi bi-upload me-1" />{subiendo ? 'Subiendo…' : tieneFoto ? 'Cambiar foto' : 'Subir foto'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={subir} disabled={subiendo} aria-label="Elegir foto" />
+            </label>
+            {tieneFoto && <button type="button" className="btn btn-outline-secondary btn-sm" onClick={quitar}>Quitar foto</button>}
+          </div>
+        ) : <div className="small text-muted">Guarda el producto y luego sube su foto.</div>}
+        <div className="form-text">JPG, PNG o WebP. Se reduce sola a 800 px antes de subirla.</div>
+        {info && <div className="small text-success" role="status">{info}</div>}
+        {error && <div className="small text-danger">{error.message}</div>}
+      </div>
+    </div>
   );
 }
