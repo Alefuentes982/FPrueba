@@ -1,11 +1,14 @@
 // Tarea de la API que vence los pedidos web sin pagar (HU-71): cada minuto pasa a "Expirado" los que llevan más de
 // 20 minutos en "Pago pendiente" y devuelve su stock. En Supabase también lo hace el job de pg_cron; las dos cosas
 // juntas no se pisan (cada una salta los pedidos que la otra está procesando). En local es la única que corre.
+// También envía los correos de los pedidos web (HU-74 y HU-79) cada 30 segundos.
 // Se desactiva con TAREAS_TIENDA=off.
 import { pool, withTx } from '../../core/db.js';
+import { enviarCorreosPedido } from './correosPedido.js';
 import { expirarPedidosWeb, usuarioSistema } from './pedidosWeb.js';
 
 const CADA_MS = 60 * 1000;
+const CORREOS_CADA_MS = Number(process.env.CORREOS_CADA_MS) || 30 * 1000;
 
 export async function vencerPedidosWeb() {
   const sistema = await usuarioSistema(pool);
@@ -17,5 +20,9 @@ export function iniciarTareasTienda() {
   const vuelta = () => vencerPedidosWeb()
     .then((n) => { if (n) console.log(`Tienda: ${n} pedido(s) web sin pagar pasaron a "Expirado".`); })
     .catch((err) => console.error('Tienda: no se pudieron vencer los pedidos sin pagar:', err.message));
+  const correos = () => enviarCorreosPedido()
+    .then(({ enviados, fallidos }) => { if (enviados || fallidos) console.log(`Tienda: correos de pedidos ${enviados} enviado(s), ${fallidos} con error.`); })
+    .catch((err) => console.error('Tienda: no se pudieron enviar los correos de pedidos:', err.message));
+  setInterval(correos, CORREOS_CADA_MS);
   return setInterval(vuelta, CADA_MS);
 }
