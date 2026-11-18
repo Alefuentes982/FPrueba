@@ -86,3 +86,22 @@
 .fct-intento-aprobado { color: var(--vo); }
 .fct-intento-rechazado, .fct-intento-anulado, .fct-intento-abortado { color: var(--rojo); }
 .fct-intento-pendiente { color: var(--naranjo); }
+
+/* Mis pedidos y avance del pedido (HU-75) */
+.fct-mis-pedidos { list-style: none; padding: 0; margin: 0 0 18px; display: flex; flex-direction: column; gap: 14px; }
+.fct-mis-pedidos-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.fct-mis-pedidos-cabeza small { display: block; color: var(--gris); margin-top: 2px; }
+.fct-mis-pedidos-codigo { font-weight: 800; font-size: 18px; color: var(--tinta); text-decoration: none; }
+.fct-mis-pedidos-codigo:hover { text-decoration: underline; }
+.fct-mis-pedidos-entrega { margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.fct-mis-pedidos-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+.fct-seguimiento { list-style: none; padding: 0; margin: 0 0 18px; display: grid; grid-template-columns: repeat(4, 1fr); counter-reset: paso; }
+.fct-seguimiento-compacto { margin: 0; }
+.fct-seguimiento li { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 13px; color: var(--gris); position: relative; }
+.fct-seguimiento li + li::before { content: ''; position: absolute; top: 14px; right: 50%; width: 100%; height: 3px; background: var(--linea); z-index: 0; }
+.fct-seguimiento li.hecho + li::before, .fct-seguimiento li.hecho + li.actual::before { background: var(--vo); }
+.fct-seguimiento-punto { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 2px solid var(--linea); font-weight: 700; position: relative; z-index: 1; }
+.fct-seguimiento li.hecho .fct-seguimiento-punto { background: var(--vo); border-color: var(--vo); color: #fff; }
+.fct-seguimiento li.actual { color: inherit; font-weight: 700; }
+.fct-seguimiento li.actual .fct-seguimiento-punto { border-color: var(--vo); color: var(--vo); }
+@media (max-width: 560px) { .fct-seguimiento li { font-size: 11px; } }

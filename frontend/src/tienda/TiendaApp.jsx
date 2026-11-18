@@ -4,6 +4,7 @@ import { ComunaDespachoProvider } from './ComunaDespacho.jsx';
 import Carrito from './Carrito.jsx';
 import Catalogo from './Catalogo.jsx';
 import Checkout from './compra/Checkout.jsx';
+import MisPedidos from './compra/MisPedidos.jsx';
 import PedidoWeb from './compra/PedidoWeb.jsx';
 import Cuenta from './cuenta/Cuenta.jsx';
 import { NuevaClave, Recuperar } from './cuenta/Recuperar.jsx';
@@ -46,6 +47,7 @@ export default function TiendaApp() {
                     <Route path="cuenta/recuperar" element={<Recuperar />} />
                     <Route path="cuenta/nueva-clave" element={<NuevaClave />} />
                     <Route path="checkout" element={<Checkout />} />
+                    <Route path="pedido" element={<MisPedidos />} />
                     <Route path="pedido/:id" element={<PedidoWeb />} />
                     <Route path="*" element={<NoEncontrada />} />
                   </Routes>
