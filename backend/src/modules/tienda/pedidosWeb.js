@@ -18,11 +18,11 @@ export async function usuarioSistema(db) {
   return rows[0].id;
 }
 
-// Stock disponible (sin lotes vencidos) de los productos del carro en las sucursales que venden en línea.
+// Stock que se puede vender a distancia (sin lotes bajo la vida útil mínima de la tienda, HU-93) de los productos del carro en las sucursales que venden en línea.
 async function disponibilidad(db, items) {
   const sucursales = await sucursalesWeb(db);
   const { rows } = await db.query(
-    `SELECT sucursal_id, producto_id, disponible FROM vw_stock_disponible
+    `SELECT sucursal_id, producto_id, disponible FROM vw_stock_disponible_web
       WHERE producto_id = ANY($1::uuid[]) AND sucursal_id = ANY($2::uuid[])`,
     [items.map((x) => x.producto_id), sucursales.map((s) => s.id)]);
   return disponibilidadPorSucursal(sucursales, rows, items);

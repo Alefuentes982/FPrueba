@@ -282,7 +282,8 @@ export async function entregarEnMostrador(db, id) {
 }
 
 // Productos vendibles con su precio y stock disponible en una sucursal (buscador del pedido y de la caja).
-// Por un canal a distancia solo se ofrecen los de condición de venta permitida online.
+// Por un canal a distancia solo se ofrecen los de condición de venta permitida online, con el stock que la reserva
+// a distancia puede tomar (vw_stock_disponible_web, HU-93).
 export async function buscarProductosVendibles(db, { sucursalId, q, remoto, limit = 20 }) {
   const { rows } = await db.query(
     `SELECT p.id, p.sku, p.nombre, p.precio, c.nombre AS categoria, cv.nombre AS condicion_venta,
@@ -290,7 +291,7 @@ export async function buscarProductosVendibles(db, { sucursalId, q, remoto, limi
        FROM producto p
        JOIN categoria c ON c.id = p.categoria_id
        JOIN condicion_venta cv ON cv.id = p.condicion_venta_id
-       LEFT JOIN vw_stock_disponible sd ON sd.producto_id = p.id AND sd.sucursal_id = $1
+       LEFT JOIN ${remoto ? 'vw_stock_disponible_web' : 'vw_stock_disponible'} sd ON sd.producto_id = p.id AND sd.sucursal_id = $1
       WHERE p.activo AND cv.activa AND (NOT $2::boolean OR cv.permite_venta_online)
         AND ($3::text IS NULL OR p.sku ILIKE $3 OR p.nombre ILIKE $3)
       ORDER BY (p.sku ILIKE $4) DESC, (COALESCE(sd.disponible, 0) > 0) DESC, p.nombre LIMIT $5`,
