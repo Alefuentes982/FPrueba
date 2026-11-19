@@ -6,7 +6,8 @@ import { likeParam, listResponse, paging, uuid } from '../../core/sql.js';
 import { HttpError } from '../../core/errors.js';
 import { correoSchema } from '../../core/correo.js';
 import { comprobantePedido, enviarComprobantePedido } from './comprobante.js';
-import { accionesWeb, ESTADOS_COLA, minutosDesde, revisarCambioWeb } from './cola.js';
+import { accionesWeb, ESTADOS_COLA, minutosDesde, revisarCambioWeb, revisarEntregaRetiro } from './cola.js';
+import { normalizarRut } from '../proveedores/rut.js';
 import { estadoSchema, pagosSchema, pedidoSchema } from './esquemas.js';
 import { anularYReembolsar, pagoWebpay, reembolsosDelPedido, revisarAnulacion } from './reembolso.js';
 import { esAdministrador } from '../../core/roles.js';
@@ -166,6 +167,25 @@ r.post('/:id/cancelar', async (req, res) => {
     await cancelarPedido(db, req.params.id);
   });
   res.json(await fichaPedido(req.params.id, req.user));
+});
+
+// Entrega de un retiro en farmacia (HU-77): el vendedor escribe el número de pedido y el RUT que muestra el cliente.
+// Si no calzan, el pedido no cambia y el intento queda en el log.
+r.post('/:id/entregar', async (req, res) => {
+  const id = uuid.parse(req.params.id);
+  const { codigo, rut } = z.object({ codigo: z.string().trim().max(20).default(''), rut: z.string().trim().max(15).default('') }).parse(req.body ?? {});
+  await withTx(req.usuarioId, async (db) => {
+    const p = await bloquearPedido(db, id);
+    const { rows } = await db.query(
+      'SELECT p.tipo_entrega, c.rut AS rut_cliente FROM pedido p LEFT JOIN cliente c ON c.usuario_id = p.cliente_id WHERE p.id = $1', [id]);
+    const error = revisarEntregaRetiro({ ...p, ...rows[0] }, { codigo, rut, usuario: req.user, normalizarRut });
+    if (error) {
+      if (error.path) console.warn(`Entrega rechazada de ${codigoPedido(p.numero)} por ${req.user.correo}: ${error.path} no corresponde.`);
+      throw new HttpError(error.status, error.error, error.path && [{ path: error.path, message: error.error }]);
+    }
+    await cambiarEstado(db, id, 'Entregado');
+  });
+  res.json(await fichaPedido(id, req.user));
 });
 
 // Anula un pedido web pagado y reembolsa por Webpay todo lo pagado (HU-80). Solo el Administrador.
