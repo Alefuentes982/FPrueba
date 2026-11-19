@@ -2,8 +2,10 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { pool, withTx } from '../../core/db.js';
+import { paging } from '../../core/sql.js';
 import { checkoutSchema, idPedido, opcionesSchema } from './esquemasPedido.js';
 import { cancelarPedidoWeb, crearPedidoWeb, opcionesCheckout, pedidoDelCliente, usuarioSistema } from './pedidosWeb.js';
+import { comprobanteDelCliente, listarMisPedidos } from './misPedidos.js';
 import { autenticarCliente } from './sesionCliente.js';
 
 const r = Router();
@@ -29,6 +31,17 @@ r.post('/', limiteCrear, async (req, res) => {
   const sistema = await usuarioSistema(pool);
   const creado = await withTx(sistema, (db) => crearPedidoWeb(db, req.cliente, d));
   res.status(201).json(creado);
+});
+
+// Mis pedidos (HU-75): los del cliente, el más reciente primero.
+r.get('/', async (req, res) => {
+  const { limit, page, offset } = paging({ limit: req.query.limit ?? 10, page: req.query.page });
+  res.json({ ...(await listarMisPedidos(pool, req.cliente.id, { limit: Math.min(limit, 50), offset })), page });
+});
+
+// Comprobante PDF de un pedido propio y pagado (JSON con el PDF en base64, como en el sistema).
+r.get('/:id/comprobante', async (req, res) => {
+  res.json(await comprobanteDelCliente(pool, req.cliente.id, idPedido.parse(req.params.id)));
 });
 
 r.get('/:id', async (req, res) => {

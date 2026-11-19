@@ -125,7 +125,8 @@ function MiCuenta({ cliente }) {
           </>
         )}
         <div className="fct-cuenta-acciones">
-          <Link to="/tienda/productos" className="fct-btn-primario">Seguir comprando</Link>
+          <Link to="/tienda/pedido" className="fct-btn-primario"><i className="bi bi-bag-check" aria-hidden="true" />&nbsp;Mis pedidos</Link>
+          <Link to="/tienda/productos" className="fct-btn-borde">Seguir comprando</Link>
           <button type="button" className="fct-btn-borde" onClick={() => { salir(); navigate('/tienda'); }}>
             <i className="bi bi-box-arrow-right" aria-hidden="true" />&nbsp;Cerrar sesión
           </button>

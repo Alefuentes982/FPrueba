@@ -19,7 +19,7 @@ export const FUNCIONES = {
   checkout: true, // HU-71: continuar la compra desde el carro (Sprint 6)
   despacho: true, // HU-71 y HU-78: despacho a domicilio (Sprint 6, sin costo) con costo por comuna (Sprint 7)
   pago: true, // HU-72: pagar con Webpay Plus desde el pedido (Sprint 6)
-  seguimiento: false, // HU-75: sigue tu pedido (Sprint 7)
+  seguimiento: true, // HU-75: sigue tu pedido (Sprint 7)
 };
 
 // Enlaces legales. Se muestran en el pie solo cuando tienen dirección.
