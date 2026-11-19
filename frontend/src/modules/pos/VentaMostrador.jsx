@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, qs } from '../../api.js';
 import BotonesDocumento from '../../components/BotonesDocumento.jsx';
 import { fechaHora, money } from '../../format.js';
-import { textoAjuste } from '../../redondeo.js';
+import { redondearEfectivo, textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
 import EnviarCorreo from '../../components/EnviarCorreo.jsx';
 import { ErrorAlert } from '../../components/ui.jsx';
@@ -16,6 +16,7 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
   const [resultados, setResultados] = useState([]);
   const [carrito, setCarrito] = useState([]); // { producto_id, sku, nombre, precio, cantidad, disponible }
   const [cotizacion, setCotizacion] = useState(null);
+  const [recalculando, setRecalculando] = useState(false); // HU-90: cifras atenuadas mientras llega /pos/cotizar
   const [cliente, setCliente] = useState('');
   const [cobrando, setCobrando] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,12 +38,14 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
 
   // Totales y descuentos oficiales: los calcula el backend con la misma regla que luego usa la base.
   useEffect(() => {
-    if (carrito.length === 0) { setCotizacion(null); return undefined; }
+    if (carrito.length === 0) { setCotizacion(null); setRecalculando(false); return undefined; }
     let vigente = true;
+    setRecalculando(true);
     const t = setTimeout(() => {
       api.post('/pos/cotizar', { items: carrito.map((l) => ({ producto_id: l.producto_id, cantidad: Number(l.cantidad) || 1 })) })
         .then((c) => vigente && setCotizacion(c))
-        .catch((e) => vigente && setError(e));
+        .catch((e) => vigente && setError(e))
+        .finally(() => vigente && setRecalculando(false));
     }, 200);
     return () => { vigente = false; clearTimeout(t); };
   }, [carrito]);
@@ -193,8 +196,8 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
                 </tbody>
               </table>
             )}
-            {cotizacion?.descuento_total > 0 && <div className="text-end text-success">Descuentos: -{money(cotizacion.descuento_total)}</div>}
-            <div className="d-flex justify-content-between align-items-center fs-3 fw-bold my-2"><span>Total</span><span>{money(total)}</span></div>
+            {carrito.length > 0 && <Desglose cotizacion={cotizacion} total={total} recalculando={recalculando} />}
+            {carrito.length === 0 && <div className="d-flex justify-content-between align-items-center fs-3 fw-bold my-2"><span>Total</span><span>{money(0)}</span></div>}
             <input className="form-control mb-3" placeholder="Cliente (opcional)" maxLength={150} value={cliente} onChange={(e) => setCliente(e.target.value)} disabled={cobrando} />
             <div className="d-flex gap-2">
               <button className="btn btn-success btn-lg flex-grow-1" disabled={!cotizacion || cobrando || medios.length === 0} onClick={() => setCobrando(true)}>
@@ -213,6 +216,30 @@ export default function VentaMostrador({ turno, medios, onVenta }) {
             ayuda={`Turno de ${turno.sucursal} · Caja ${turno.caja_numero}. Si falta stock o el pago no calza, no se registra nada.`} />
         </div>
       )}
+    </div>
+  );
+}
+
+// Desglose de la venta (HU-90): subtotal, descuentos, neto, IVA y total con los valores de /pos/cotizar, y lo que se
+// cobra si el cliente paga todo en efectivo (redondeo de la Ley 20.956). Mientras se recalcula, las cifras se atenúan.
+function Desglose({ cotizacion: c, total, recalculando }) {
+  const efectivo = redondearEfectivo(total);
+  const ajuste = efectivo - Number(total);
+  const fila = (etiqueta, valor, clase = '') => (
+    <div className={`d-flex justify-content-between ${clase}`}><span>{etiqueta}</span><span>{valor}</span></div>
+  );
+  return (
+    <div className={`fc-desglose my-2${recalculando ? ' opacity-50' : ''}`} aria-busy={recalculando} data-testid="desglose">
+      {c && fila('Subtotal', money(c.subtotal_bruto), 'text-muted')}
+      {c?.descuento_total > 0 && fila('Descuentos', `-${money(c.descuento_total)}`, 'text-success')}
+      {c && fila('Neto', money(c.subtotal_neto), 'small text-muted')}
+      {c && fila('IVA 19%', money(c.iva), 'small text-muted')}
+      <div className="d-flex justify-content-between align-items-center fs-3 fw-bold border-top pt-1 mt-1"><span>Total</span><span>{money(total)}</span></div>
+      <div className="d-flex justify-content-between align-items-center text-primary">
+        <span><i className="bi bi-cash me-1" />En efectivo</span>
+        <span className="fw-semibold">{money(efectivo)}{ajuste !== 0 && <span className="small text-muted ms-1">(redondeo {textoAjuste(ajuste, money)})</span>}</span>
+      </div>
+      {recalculando && <div className="small text-muted text-end">Recalculando…</div>}
     </div>
   );
 }
