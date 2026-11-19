@@ -4,12 +4,13 @@ import { api, qs } from '../../api.js';
 import { useAuth } from '../../AuthContext.jsx';
 import { money } from '../../format.js';
 import { ErrorAlert, PageHeader, Spinner, useAsync } from '../../components/ui.jsx';
+import EntregaRetiro from './EntregaRetiro.jsx';
 import { estadoPedidoClase } from './estados.js';
 
 // Cola de pedidos web (HU-76): lo que compró la tienda en línea y espera al personal. Se actualiza sola cada 30 s.
 const ESTADOS = ['Pagado', 'En preparación', 'Listo para retiro', 'En despacho'];
 const SIGUIENTE = {
-  retiro: { Pagado: 'En preparación', 'En preparación': 'Listo para retiro' },
+  retiro: { Pagado: 'En preparación', 'En preparación': 'Listo para retiro' }, // el retiro listo se entrega con número y RUT (HU-77)
   despacho: { Pagado: 'En preparación', 'En preparación': 'En despacho', 'En despacho': 'Entregado' },
 };
 const BOTON = { 'En preparación': 'Preparar', 'Listo para retiro': 'Listo para retiro', 'En despacho': 'Enviar a despacho', Entregado: 'Entregado' };
@@ -25,6 +26,7 @@ export default function ColaWeb() {
   const [aviso, setAviso] = useState(null);
   const [errorAccion, setErrorAccion] = useState(null);
   const [ocupado, setOcupado] = useState(null);
+  const [entregando, setEntregando] = useState(null);
   const catalogos = useAsync(() => api.get('/catalogos'), []);
   const { data, error, loading, reload } = useAsync(
     () => api.get(`/pedidos/web${qs({ estado, sucursal_id: sucursal, entrega })}`), [estado, sucursal, entrega]);
@@ -132,7 +134,11 @@ export default function ColaWeb() {
                         <button className="btn btn-sm btn-primary" disabled={ocupado === p.id} onClick={() => avanzar(p, siguiente)}>
                           {BOTON[siguiente]}<i className="bi bi-chevron-right ms-1" />
                         </button>
-                      ) : p.estado === 'Listo para retiro' && <span className="small text-muted">Espera al cliente</span>}
+                      ) : p.estado === 'Listo para retiro' && (
+                        <button className="btn btn-sm btn-success" onClick={() => setEntregando(p)}>
+                          <i className="bi bi-person-check me-1" />Entregar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -140,6 +146,10 @@ export default function ColaWeb() {
             </tbody>
           </table>
         </div>
+      )}
+      {entregando && (
+        <EntregaRetiro pedido={entregando} onCerrar={() => setEntregando(null)}
+          onEntregado={() => { setAviso(`${entregando.codigo} entregado a ${entregando.nombre_cliente}.`); setEntregando(null); reload(); }} />
       )}
     </>
   );

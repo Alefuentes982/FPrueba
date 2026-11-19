@@ -8,6 +8,7 @@ import { textoAjuste } from '../../redondeo.js';
 import PanelPago from '../../components/PanelPago.jsx';
 import EnviarCorreo from '../../components/EnviarCorreo.jsx';
 import { ErrorAlert, Ficha, PageHeader, Seccion, Spinner, useAsync } from '../../components/ui.jsx';
+import EntregaRetiro from './EntregaRetiro.jsx';
 import { estadoPedidoClase } from './estados.js';
 
 export default function PedidoDetalle() {
@@ -21,6 +22,7 @@ export default function PedidoDetalle() {
   const [busy, setBusy] = useState(false);
   const [cobrando, setCobrando] = useState(false);
   const [anulando, setAnulando] = useState(false);
+  const [entregando, setEntregando] = useState(false);
   const [motivo, setMotivo] = useState('');
 
   const ejecutar = async (fn, mensaje) => {
@@ -67,6 +69,9 @@ export default function PedidoDetalle() {
             <i className="bi bi-cash-coin me-1" />Registrar pago
           </button>
         )}
+        {tiene('entregar') && (
+          <button className="btn btn-success" onClick={() => setEntregando(true)}><i className="bi bi-person-check me-1" />Entregar al cliente</button>
+        )}
         {siguientes.map((s) => (
           <button key={s} className="btn btn-primary" disabled={busy}
             onClick={() => ejecutar(() => api.post(`/pedidos/${id}/estado`, { estado: s }), `Pedido en estado "${s}".`)}>
@@ -88,6 +93,11 @@ export default function PedidoDetalle() {
         )}
         <Link to="/pedidos" className="btn btn-outline-secondary">Volver</Link>
       </PageHeader>
+
+      {entregando && (
+        <EntregaRetiro pedido={p} onCerrar={() => setEntregando(false)}
+          onEntregado={() => { setEntregando(false); setAviso(`Pedido ${p.codigo} entregado a ${p.nombre_cliente}.`); reload(); historial.reload(); }} />
+      )}
 
       {anulando && (
         <Seccion titulo="Anular y reembolsar por Webpay" icono="bi-arrow-counterclockwise" className="border-danger">
