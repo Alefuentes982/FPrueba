@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { pool, withTx } from '../../core/db.js';
 import { HttpError } from '../../core/errors.js';
 import { esAdministrador } from '../../core/roles.js';
-import { costosSchema } from './esquemas.js';
+import { costosSchema, vidaUtilWebSchema } from './esquemas.js';
 
 const r = Router();
 
@@ -41,6 +41,23 @@ r.put('/', async (req, res) => {
     }
   });
   res.json({ guardadas: comunas.length });
+});
+
+// Vida útil mínima para vender en la tienda (HU-93): días que le deben quedar a un lote para reservarlo a distancia.
+const PARAMETRO_WEB = 'vida_util_web_dias';
+r.get('/vida-util', async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT p.valor AS dias, p.minimo, p.maximo, p.actualizado_en, u.nombre AS actualizado_por
+       FROM parametro p LEFT JOIN usuario u ON u.id = p.actualizado_por WHERE p.clave = $1`, [PARAMETRO_WEB]);
+  if (!rows[0]) throw new HttpError(500, 'Falta el parámetro de vida útil de la tienda. Ejecute db/migraciones/020_vida_util_reserva_web.sql.');
+  res.json(rows[0]);
+});
+r.put('/vida-util', async (req, res) => {
+  if (!esAdministrador(req.user)) throw new HttpError(403, 'Solo el Administrador cambia la vida útil mínima de la tienda.');
+  const { dias } = vidaUtilWebSchema.parse(req.body);
+  await withTx(req.usuarioId, (db) => db.query(
+    'UPDATE parametro SET valor = $1, actualizado_en = NOW(), actualizado_por = $2 WHERE clave = $3', [dias, req.usuarioId, PARAMETRO_WEB]));
+  res.json({ dias });
 });
 
 export default r;

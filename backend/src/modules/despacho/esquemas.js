@@ -11,3 +11,8 @@ export const costoSchema = z.object({
 export const costosSchema = z.object({
   comunas: z.array(costoSchema.extend({ comuna_id: z.string().uuid() })).min(1, 'No hay cambios que guardar.').max(400),
 });
+
+// Vida útil mínima de la tienda (HU-93): días enteros entre 0 y 365.
+export const vidaUtilWebSchema = z.object({
+  dias: z.number({ invalid_type_error: 'Escriba un número de días.' }).int('Use días enteros.').min(0, 'Mínimo 0 días.').max(365, 'Máximo 365 días.'),
+});
