@@ -5,8 +5,8 @@ import { Migas } from './comunes.jsx';
 import { useDatosTienda } from './DatosTienda.jsx';
 import { prefiereMenosMovimiento } from './ui/movimiento.js';
 
-// Página de ayuda: farmacia y horario, cómo comprar, retiro, medicamentos con receta y pago. Los enlaces de la
-// portada y del pie llegan a cada sección por su ancla (#retiro, #receta...).
+// Página de ayuda: farmacia y horario, cómo comprar (guía de compra, HU-84), retiro, despacho, seguimiento, receta y
+// pago. Los enlaces de la portada y del pie llegan a cada sección por su ancla (#retiro, #despacho...).
 export default function Informacion() {
   const { hash } = useLocation();
   const { sucursales } = useDatosTienda();
@@ -24,6 +24,8 @@ export default function Informacion() {
           <a href="#farmacia">Farmacia y horario</a>
           <a href="#como-comprar">Cómo comprar</a>
           <a href="#retiro">Retiro en farmacia</a>
+          {FUNCIONES.despacho && <a href="#despacho">Despacho a domicilio</a>}
+          {FUNCIONES.seguimiento && <a href="#seguimiento">Sigue tu pedido</a>}
           <a href="#receta">Medicamentos con receta</a>
           {FUNCIONES.checkout && <a href="#pago">Medios de pago</a>}
         </nav>
@@ -43,13 +45,22 @@ export default function Informacion() {
 
           <section id="como-comprar" className="fct-info-seccion">
             <h2>Cómo comprar</h2>
-            <ol>
-              <li>Busca el producto por su nombre o entra a una categoría. Solo ves productos con stock en la farmacia.</li>
-              <li>Agrégalo al carro. En el carro ves el total con los descuentos que correspondan.</li>
-              {FUNCIONES.checkout
-                ? <><li>Continúa la compra, indica tus datos y paga con Webpay.</li><li>Te avisamos por correo cuando tu pedido esté listo.</li></>
-                : <li>El pago en línea se habilita pronto. Por ahora puedes armar tu carro y comprar en la farmacia.</li>}
-            </ol>
+            {FUNCIONES.checkout ? (
+              <ol className="fct-guia-pasos">
+                <li><b>Busca tus productos.</b> Escribe el nombre o entra a una categoría. Solo ves productos con stock en la farmacia.</li>
+                <li><b>Agrégalos al carro.</b> En el carro ves el total con los descuentos por cantidad que correspondan{FUNCIONES.despacho ? ' y el costo del despacho a tu comuna' : ''}.</li>
+                <li><b>Ingresa o crea tu cuenta.</b> Te pedimos nombre, RUT, teléfono y correo. Confirma tu correo con el enlace que te enviamos.</li>
+                <li><b>Elige cómo recibirlo.</b> Retiro en farmacia, sin costo, o despacho a domicilio con el costo de tu comuna.</li>
+                <li><b>Reserva y paga con Webpay.</b> Guardamos tus productos 20 minutos mientras pagas con tarjeta de débito o crédito.</li>
+                <li><b>Sigue tu pedido.</b> Te avisamos por correo cuando lo pagas, cuando está listo para retirar o va en camino, y cuando se entrega.</li>
+              </ol>
+            ) : (
+              <ol>
+                <li>Busca el producto por su nombre o entra a una categoría. Solo ves productos con stock en la farmacia.</li>
+                <li>Agrégalo al carro. En el carro ves el total con los descuentos que correspondan.</li>
+                <li>El pago en línea se habilita pronto. Por ahora puedes armar tu carro y comprar en la farmacia.</li>
+              </ol>
+            )}
             <Link to="/tienda/productos" className="fct-btn-borde">Ver productos</Link>
           </section>
 
@@ -60,6 +71,31 @@ export default function Informacion() {
               los posteriores, al día siguiente. Para retirar, presenta tu número de pedido y el RUT de quien compró.
             </p>
           </section>
+
+          {FUNCIONES.despacho && (
+            <section id="despacho" className="fct-info-seccion">
+              <h2>Despacho a domicilio</h2>
+              <p>
+                El costo depende de tu comuna: elígela en la barra superior y lo verás en cada producto, en el carro y en el
+                resumen antes de pagar. Si tu comuna aún no tiene despacho, puedes retirar en la farmacia sin costo.
+              </p>
+              <p>Para despacharte, una sola farmacia debe tener todo tu pedido. Si no, te lo indicamos en el checkout.</p>
+            </section>
+          )}
+
+          {FUNCIONES.seguimiento && (
+            <section id="seguimiento" className="fct-info-seccion">
+              <h2>Sigue tu pedido</h2>
+              <p>
+                En <Link to="/tienda/pedido">Mis pedidos</Link> ves cada compra, en qué paso va (pagado, preparando, listo para
+                retirar o en camino, entregado) y puedes descargar el comprobante.
+              </p>
+              <p>
+                Un pedido sin pagar se anula solo a los 20 minutos y los productos vuelven a la
+                tienda; no se hace ningún cargo. También puedes anularlo tú antes de pagar.
+              </p>
+            </section>
+          )}
 
           <section id="receta" className="fct-info-seccion">
             <h2>Medicamentos con receta</h2>
@@ -74,6 +110,10 @@ export default function Informacion() {
             <section id="pago" className="fct-info-seccion">
               <h2>Medios de pago</h2>
               <p>Pagas con Webpay, con tarjeta de débito o de crédito. FarmaClick no recibe ni guarda los datos de tu tarjeta.</p>
+              <p>
+                Si el pago se rechaza o lo anulas en Webpay, tu pedido sigue reservado y puedes intentar de nuevo mientras quede
+                tiempo. Si la farmacia no puede entregar un pedido pagado, lo anula y te devuelve el dinero por Webpay.
+              </p>
             </section>
           )}
         </div>

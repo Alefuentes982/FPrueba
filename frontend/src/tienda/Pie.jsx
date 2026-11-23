@@ -33,6 +33,7 @@ export default function Pie() {
             <h2>Servicio al cliente</h2>
             <Link to="/tienda/informacion#como-comprar">Cómo comprar</Link>
             <Link to="/tienda/informacion#retiro">Retiro en farmacia</Link>
+            {FUNCIONES.despacho && <Link to="/tienda/informacion#despacho">Despacho a domicilio</Link>}
             <Link to="/tienda/informacion#receta">Medicamentos con receta</Link>
             <Link to="/tienda/informacion#farmacia">Horario y ubicación</Link>
             {FUNCIONES.seguimiento && <Link to="/tienda/pedido">Sigue tu pedido</Link>}

@@ -44,6 +44,9 @@
 .fct-util-retiro, .fct-util nav, .fct-util nav > * { display: flex; align-items: center; gap: 6px; }
 .fct-util nav { gap: 22px; }
 .fct-util a:hover { color: var(--to); }
+/* Comuna de despacho (HU-78) */
+.fct-util-comuna { border: 0; background: none; padding: 0; color: inherit; font: inherit; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fct-util-comuna:hover, .fct-util-comuna:focus-visible { color: var(--to); text-decoration: underline; }
 
 /* Cabecera */
 .fct-cabecera { background: #fff; }
@@ -296,6 +299,8 @@
 .fct-ficha-info h1 { font-size: 30px; line-height: 1.15; margin: 6px 0 8px; }
 .fct-ficha-meta { display: flex; gap: 14px; font-size: 13px; color: var(--gris); flex-wrap: wrap; }
 .fct-sellos { display: flex; gap: 8px; margin: 14px 0 4px; flex-wrap: wrap; }
+.fct-sello-boton { font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 5px 10px; display: flex; gap: 5px; align-items: center; background: #E7F4F4; color: var(--to); border: 0; cursor: pointer; }
+.fct-sello-boton:hover, .fct-sello-boton:focus-visible { text-decoration: underline; }
 .fct-sellos span { font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 5px 10px; display: flex; gap: 5px; align-items: center; background: #E7F4F4; color: var(--to); }
 .fct-ficha-precio { border: 1px solid var(--linea); border-radius: 16px; padding: 18px 20px; margin: 16px 0; }
 .fct-ficha-precio .fct-precio-normal { font-size: 14px; }
@@ -532,7 +537,9 @@
   .fct-solo-escritorio { display: none !important; }
   .fct-solo-movil { display: flex !important; }
   .fct-filtros-movil.fct-solo-movil { display: grid !important; }
-  .fct-util nav > :not(:last-child) { display: none; }
+  .fct-util nav > :not(:last-child):not(.fct-util-comuna) { display: none; }
+  .fct-util-comuna { white-space: nowrap; }
+  .fct-util-comuna-prefijo { display: none; }
   .fct-cabecera .fct-wrap { flex-wrap: wrap; min-height: 0; padding-top: 12px; padding-bottom: 12px; gap: 12px; }
   .fct-btn-categorias { order: -2; border: 0; padding: 4px; }
   .fct-btn-categorias span { display: none; }

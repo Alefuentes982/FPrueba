@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { guardarFoto, MAX_BYTES } from '../../core/fotos.js';
 import { z } from 'zod';
 import { pool, withTx } from '../../core/db.js';
 import { notFound } from '../../core/errors.js';
@@ -20,7 +21,7 @@ const campos = {
   descripcion: optionalText(2000),
   presentacion: optionalText(100),
   // Foto para la tienda: dirección https de una imagen ya publicada. Vacío = sin foto.
-  imagen_url: optionalText(500).refine((v) => v == null || /^https:\/\/\S+$/.test(v), 'La imagen debe ser una dirección https://.'),
+  imagen_url: optionalText(500).refine((v) => v == null || /^https:\/\/\S+$/.test(v) || /^\/api\/fotos\/\S+$/.test(v), 'La imagen debe ser una dirección https://.'),
 };
 
 // El costo solo se informa al crear; después lo mantiene el PMP de cada recepción de OC.
@@ -93,6 +94,24 @@ r.put('/:id', async (req, res) => {
     if (!rowCount) throw notFound('Producto');
   }
   res.json(await getProducto(pool, req.params.id));
+});
+
+// Foto del producto (HU-96). La web la envía ya reducida, como la imagen misma (image/jpeg, png o webp), no como JSON:
+// así no pasa por el límite de 100 KB del JSON. Se guarda con el nombre del SKU y reemplaza a la anterior.
+r.post('/:id/foto', express.raw({ type: ['image/*', 'application/octet-stream'], limit: MAX_BYTES + 1024 }), async (req, res) => {
+  const id = uuid.parse(req.params.id);
+  const { rows } = await pool.query('SELECT sku FROM producto WHERE id = $1', [id]);
+  if (!rows[0]) throw notFound('Producto');
+  const url = await guardarFoto(rows[0].sku, Buffer.isBuffer(req.body) ? req.body : null);
+  await pool.query('UPDATE producto SET imagen_url = $1 WHERE id = $2', [url, id]);
+  res.json(await getProducto(pool, id));
+});
+
+r.delete('/:id/foto', async (req, res) => {
+  const id = uuid.parse(req.params.id);
+  const { rowCount } = await pool.query('UPDATE producto SET imagen_url = NULL WHERE id = $1', [id]);
+  if (!rowCount) throw notFound('Producto');
+  res.json(await getProducto(pool, id));
 });
 
 // "Eliminar" = dar de baja (el backend no tiene DELETE sobre producto y el kardex lo referencia).

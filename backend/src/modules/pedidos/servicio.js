@@ -110,6 +110,7 @@ async function insertarLineas(db, pedidoId, items) {
  * @param ctx    { canal: 'Online' | 'Presencial', usuarioId, turnoId?, clienteId?, vendedorId? }  (Presencial exige turnoId;
  *               lo valida la base). vendedorId: quién atendió; por defecto usuarioId. En la tienda va vacío (HU-71).
  * d.tipo_entrega: 'retiro' o 'despacho' en los pedidos web; vacío en los demás.
+ * d.costo_despacho: lo que se cobra por despachar (HU-78). Lo fija la tienda según la comuna; 0 en los demás pedidos.
  */
 export async function crearPedido(db, d, ctx) {
   const { rows: canal } = await db.query('SELECT id, requiere_turno FROM canal_venta WHERE nombre = $1', [ctx.canal]);
@@ -121,11 +122,11 @@ export async function crearPedido(db, d, ctx) {
   }
   const { rows } = await db.query(
     `INSERT INTO pedido (canal_venta_id, estado_pedido_id, nombre_cliente, direccion_pedido, telefono, comuna_id,
-                         cliente_id, vendedor_id, sucursal_id, turno_caja_id, tipo_entrega)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+                         cliente_id, vendedor_id, sucursal_id, turno_caja_id, tipo_entrega, costo_despacho)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [canal[0].id, await estadoPedidoId(db, ESTADO.PENDIENTE), d.nombre_cliente, d.direccion_pedido ?? null, d.telefono ?? null,
       d.comuna_id ?? null, ctx.clienteId ?? null, ctx.vendedorId !== undefined ? ctx.vendedorId : ctx.usuarioId, d.sucursal_id,
-      ctx.turnoId ?? null, d.tipo_entrega ?? null]);
+      ctx.turnoId ?? null, d.tipo_entrega ?? null, d.costo_despacho ?? 0]);
   await insertarLineas(db, rows[0].id, d.items);
   if (d.reservar) await reservarStock(db, rows[0].id);
   return rows[0].id;
@@ -281,7 +282,8 @@ export async function entregarEnMostrador(db, id) {
 }
 
 // Productos vendibles con su precio y stock disponible en una sucursal (buscador del pedido y de la caja).
-// Por un canal a distancia solo se ofrecen los de condición de venta permitida online.
+// Por un canal a distancia solo se ofrecen los de condición de venta permitida online, con el stock que la reserva
+// a distancia puede tomar (vw_stock_disponible_web, HU-93).
 export async function buscarProductosVendibles(db, { sucursalId, q, remoto, limit = 20 }) {
   const { rows } = await db.query(
     `SELECT p.id, p.sku, p.nombre, p.precio, c.nombre AS categoria, cv.nombre AS condicion_venta,
@@ -289,7 +291,7 @@ export async function buscarProductosVendibles(db, { sucursalId, q, remoto, limi
        FROM producto p
        JOIN categoria c ON c.id = p.categoria_id
        JOIN condicion_venta cv ON cv.id = p.condicion_venta_id
-       LEFT JOIN vw_stock_disponible sd ON sd.producto_id = p.id AND sd.sucursal_id = $1
+       LEFT JOIN ${remoto ? 'vw_stock_disponible_web' : 'vw_stock_disponible'} sd ON sd.producto_id = p.id AND sd.sucursal_id = $1
       WHERE p.activo AND cv.activa AND (NOT $2::boolean OR cv.permite_venta_online)
         AND ($3::text IS NULL OR p.sku ILIKE $3 OR p.nombre ILIKE $3)
       ORDER BY (p.sku ILIKE $4) DESC, (COALESCE(sd.disponible, 0) > 0) DESC, p.nombre LIMIT $5`,
@@ -327,7 +329,7 @@ export async function detallePedido(db, id) {
             p.nombre_cliente, p.telefono, p.direccion_pedido, p.comuna_id, c.nombre AS comuna,
             e.nombre AS estado, p.estado_pedido_id, cv.nombre AS canal, cv.requiere_turno,
             p.sucursal_id, s.nombre AS sucursal, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono,
-            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id, p.cliente_id, p.tipo_entrega
+            p.vendedor_id, u.nombre AS vendedor, p.turno_caja_id, p.cliente_id, p.tipo_entrega, p.costo_despacho
        FROM pedido p
        JOIN estado_pedido e ON e.id = p.estado_pedido_id
        JOIN canal_venta cv ON cv.id = p.canal_venta_id
@@ -353,6 +355,8 @@ export async function detallePedido(db, id) {
     ...pedido,
     codigo: codigoPedido(pedido.numero),
     descuento_total: Number(pedido.subtotal_bruto) - Number(pedido.total),
+    // Lo que paga el cliente: los productos más el despacho (HU-78).
+    total_a_pagar: Number(pedido.total) + Number(pedido.costo_despacho ?? 0),
     lineas: lineas.rows,
     pagos: pagos.rows,
     stock_reservado: reservado,

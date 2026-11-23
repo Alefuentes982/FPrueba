@@ -26,3 +26,11 @@ INSERT INTO dev_credencial (usuario_id, correo, password_hash)
 SELECT n.id, n.correo, CASE n.correo WHEN 'admin@farmaclick.local' THEN 'cd7c73b2273c4bf75971bb00b162b22d:29a6be6e42db715934890762617e68a0efe53a95a6ad5d6452a70b12e249cd498d78f16da5d21faf1aebe5a782829951c57306d26b529bbf3d092a82c5ea5d58'
                                      ELSE '9e1c0bd78ecd11925d28a9af3d5086ab:d3cbf2898aee241641dc4b4403cf8a96c0c0cfc5b8b9775279ffe6b7ec4b3b31974288a4cb6ead98bdee59ab2d2e990f305602f237aefa7f4745b1d0bc1fe6e5' END
   FROM nuevos n;
+
+-- Costos de despacho de prueba (HU-78): toda la Región Metropolitana a $2.990 y San Bernardo, donde está la farmacia,
+-- a $1.990. En dev (Supabase) y producción los carga el Administrador desde Pedidos > Costos de despacho.
+INSERT INTO costo_despacho (comuna_id, costo)
+SELECT c.id, CASE WHEN c.nombre = 'San Bernardo' THEN 1990 ELSE 2990 END
+  FROM comuna c JOIN region r ON r.id = c.region_id
+ WHERE r.nombre = 'Metropolitana de Santiago'
+ON CONFLICT (comuna_id) DO NOTHING;

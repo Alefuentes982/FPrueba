@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { money } from '../../format.js';
-import { pedidosApi } from '../apiTienda.js';
+import { descargarComprobante, pedidosApi } from '../apiTienda.js';
 import { useCarrito } from '../CarritoContext.jsx';
 import { Aviso, Cargando } from '../comunes.jsx';
 import { FUNCIONES } from '../contenido.js';
@@ -10,6 +10,7 @@ import Modal from '../ui/Modal.jsx';
 import { useNotificar } from '../ui/Notificaciones.jsx';
 import { hora } from './Checkout.jsx';
 import PagoWebpay from './PagoWebpay.jsx';
+import Seguimiento from './Seguimiento.jsx';
 import { Pasos } from './Pasos.jsx';
 import './compra.css';
 
@@ -99,6 +100,7 @@ function DetallePedido({ id }) {
 
       {resultadoPago && <ResultadoPago resultado={resultadoPago} pedido={p} />}
       <EstadoPedido pedido={p} segundos={segundos} />
+      <Seguimiento estado={p.estado} entrega={p.entrega} />
       {errorAccion && <Aviso error={errorAccion} />}
 
       <div className="fct-checkout">
@@ -154,13 +156,19 @@ function DetallePedido({ id }) {
           <h2>Total</h2>
           <div className="fct-fila"><span>Productos</span><b>{money(p.subtotal_bruto)}</b></div>
           {p.descuento_total > 0 && <div className="fct-fila fct-fila-descuento"><span>Descuentos</span><b>-{money(p.descuento_total)}</b></div>}
-          <div className="fct-fila"><span>{p.entrega === 'despacho' ? 'Despacho' : 'Retiro'}</span><b>Gratis</b></div>
-          <div className="fct-total"><span>Total</span><b>{money(p.total)}</b></div>
+          <div className="fct-fila"><span>{p.entrega === 'despacho' ? 'Despacho' : 'Retiro'}</span><b>{p.costo_despacho > 0 ? money(p.costo_despacho) : 'Gratis'}</b></div>
+          <div className="fct-total"><span>Total</span><b>{money(p.total_a_pagar ?? p.total)}</b></div>
           <p className="fct-nota">IVA incluido ({money(p.iva)}).</p>
           {p.puede_cancelar && (
             <button type="button" className="fct-btn-borde fct-ancho-completo" onClick={() => setConfirmarAnular(true)}>Anular pedido</button>
           )}
+          {pagado && (
+            <button type="button" className="fct-btn-borde fct-ancho-completo" onClick={() => descargarComprobante(p.id).catch(setErrorAccion)}>
+              <i className="bi bi-file-earmark-pdf" aria-hidden="true" />&nbsp;Descargar comprobante
+            </button>
+          )}
           {!pendiente && <button type="button" className="fct-btn-borde fct-ancho-completo" onClick={() => navigate('/tienda/productos')}>Seguir comprando</button>}
+          <Link to="/tienda/pedido" className="fct-seguir">Ver todos mis pedidos</Link>
         </aside>
       </div>
 

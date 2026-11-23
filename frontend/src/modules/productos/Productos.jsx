@@ -31,6 +31,7 @@ export default function Productos() {
   return (
     <>
       <PageHeader title="Productos">
+        <Link to="/productos/fotos" className="btn btn-outline-primary"><i className="bi bi-images me-1" />Fotos en lote</Link>
         <Link to="/productos/nuevo" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nuevo producto</Link>
       </PageHeader>
 

@@ -8,7 +8,7 @@ import {
 import { perfilCliente } from './sesionCliente.js';
 import { disponibilidadPorSucursal, minutosRestantes, RESERVA_MINUTOS, sucursalDespacho, venceEn } from './reglasPedido.js';
 import { unirLineas } from './reglas.js';
-import { cotizarCarrito, sucursalesWeb } from './servicio.js';
+import { costoDespacho, cotizarCarrito, sucursalesWeb } from './servicio.js';
 
 export const CORREO_SISTEMA = 'sistema@farmaclick.cl';
 
@@ -18,11 +18,11 @@ export async function usuarioSistema(db) {
   return rows[0].id;
 }
 
-// Stock disponible (sin lotes vencidos) de los productos del carro en las sucursales que venden en línea.
+// Stock que se puede vender a distancia (sin lotes bajo la vida útil mínima de la tienda, HU-93) de los productos del carro en las sucursales que venden en línea.
 async function disponibilidad(db, items) {
   const sucursales = await sucursalesWeb(db);
   const { rows } = await db.query(
-    `SELECT sucursal_id, producto_id, disponible FROM vw_stock_disponible
+    `SELECT sucursal_id, producto_id, disponible FROM vw_stock_disponible_web
       WHERE producto_id = ANY($1::uuid[]) AND sucursal_id = ANY($2::uuid[])`,
     [items.map((x) => x.producto_id), sucursales.map((s) => s.id)]);
   return disponibilidadPorSucursal(sucursales, rows, items);
@@ -38,7 +38,9 @@ export async function opcionesCheckout(db, clienteId, itemsPedidos) {
   return {
     cotizacion,
     retiro: sucursales.map(({ faltan, ...s }) => ({ ...s, faltan: faltan.length })),
-    despacho: { disponible: Boolean(despacho), sucursal: despacho?.nombre ?? null, costo: 0 },
+    // costo: el de la comuna del cliente (null si no se despacha ahí). Al elegir otra comuna, la tienda usa el costo de
+    // la lista de comunas; al crear el pedido el servidor lo vuelve a calcular.
+    despacho: { disponible: Boolean(despacho), sucursal: despacho?.nombre ?? null, costo: await costoDespacho(db, cliente?.comuna_id) },
     cliente,
     reserva_minutos: RESERVA_MINUTOS,
   };
@@ -54,6 +56,7 @@ export async function crearPedidoWeb(db, cliente, d) {
   }
   const sucursales = await disponibilidad(db, items);
   let sucursal;
+  let costo = 0;
   if (d.entrega === 'retiro') {
     sucursal = sucursales.find((s) => s.id === d.sucursal_id);
     if (!sucursal) throw new HttpError(400, 'Esa farmacia no vende en línea. Elige otra.');
@@ -61,6 +64,12 @@ export async function crearPedidoWeb(db, cliente, d) {
   } else {
     sucursal = sucursalDespacho(sucursales);
     if (!sucursal) throw new HttpError(409, 'Ninguna farmacia tiene todo tu pedido para despacharlo junto. Ajusta las cantidades del carro.');
+    // El costo lo pone el servidor según la comuna (HU-78); lo que diga el navegador no se usa.
+    costo = await costoDespacho(db, d.comuna_id);
+    if (costo === null) {
+      throw new HttpError(400, 'Todavía no despachamos a esa comuna. Elige retiro en farmacia u otra dirección.',
+        [{ path: 'comuna_id', message: 'Todavía no despachamos a esta comuna.' }]);
+    }
   }
 
   const anteriores = await db.query(
@@ -78,12 +87,16 @@ export async function crearPedidoWeb(db, cliente, d) {
     direccion_pedido: d.entrega === 'despacho' ? d.direccion : null,
     comuna_id: d.entrega === 'despacho' ? d.comuna_id : null,
     tipo_entrega: d.entrega,
+    costo_despacho: costo,
     items,
     reservar: true,
   }, { canal: 'Online', usuarioId: await usuarioSistema(db), clienteId: cliente.id, vendedorId: null });
 
-  const { rows } = await db.query('SELECT numero, total, fecha FROM pedido WHERE id = $1', [id]);
-  return { id, codigo: codigoPedido(rows[0].numero), total: Number(rows[0].total), vence: venceEn(rows[0].fecha), anulados: anteriores.rowCount };
+  const { rows } = await db.query('SELECT numero, total, costo_despacho, fecha FROM pedido WHERE id = $1', [id]);
+  return {
+    id, codigo: codigoPedido(rows[0].numero), total: Number(rows[0].total), costo_despacho: Number(rows[0].costo_despacho),
+    total_a_pagar: Number(rows[0].total) + Number(rows[0].costo_despacho), vence: venceEn(rows[0].fecha), anulados: anteriores.rowCount,
+  };
 }
 
 // Pedido web visto por su dueño. Otro cliente recibe 404, igual que si no existiera.
@@ -111,6 +124,8 @@ export async function pedidoDelCliente(db, clienteId, id) {
     subtotal_bruto: Number(p.subtotal_bruto),
     descuento_total: Number(p.descuento_total),
     total: Number(p.total),
+    costo_despacho: Number(p.costo_despacho),
+    total_a_pagar: p.total_a_pagar,
     iva: Number(p.iva),
     pagos: p.pagos.map((x) => ({ fecha: x.fecha_transaccion, medio: x.medio_pago, estado: x.estado, monto: Number(x.monto), codigo_autorizacion: x.codigo_autorizacion })),
     reservado: p.stock_reservado,

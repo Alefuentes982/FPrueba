@@ -1880,3 +1880,389 @@ COMMENT ON COLUMN pedido.tipo_entrega IS 'Pedido web: retiro (en sucursal_id) o 
 GRANT INSERT (tipo_entrega) ON pedido TO app_backend;
 
 COMMIT;
+
+-- =====================================================================
+-- 015 — Vida útil mínima al recibir una orden de compra (HU-87) y restricciones con nombre (HU-88)
+--   * Tabla parametro: valores del negocio que edita el Administrador. Primer parámetro: vida_util_minima_meses = 3.
+--   * Un lote que entra por una orden de compra debe vencer en hoy + ese plazo o después (hoy en Chile). Lo exige un
+--     trigger, aunque el lote se inserte por otra ruta que la API.
+--   * El Administrador o el Jefe de local pueden aceptar un lote bajo el mínimo indicando un motivo: queda en el lote
+--     (excepcion_vida_util) junto a quién lo aceptó (excepcion_usuario_id).
+--   * lote.fecha_ingreso por defecto es el día de hoy en Chile, no el del servidor (UTC).
+--   * Las restricciones de lote y de las líneas de la orden de compra pasan a tener nombre (ck_..., uq_...): la API las
+--     traduce a un mensaje con el campo (backend/src/core/errors.js).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS parametro (
+    clave VARCHAR(50) PRIMARY KEY,
+    valor INTEGER NOT NULL,
+    descripcion VARCHAR(300) NOT NULL,
+    minimo INTEGER,
+    maximo INTEGER,
+    actualizado_en TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    actualizado_por UUID REFERENCES usuario(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_parametro_rango CHECK ((minimo IS NULL OR valor >= minimo) AND (maximo IS NULL OR valor <= maximo))
+);
+COMMENT ON TABLE parametro IS 'Valores del negocio que edita el Administrador desde el sistema (por ejemplo, la vida útil mínima de un lote).';
+
+INSERT INTO parametro (clave, valor, descripcion, minimo, maximo)
+VALUES ('vida_util_minima_meses', 3, 'Meses de vida útil que debe tener un lote al recibirlo en una orden de compra.', 0, 24)
+ON CONFLICT (clave) DO NOTHING;
+
+GRANT SELECT ON parametro TO app_backend;
+GRANT UPDATE (valor, actualizado_en, actualizado_por) ON parametro TO app_backend;
+
+ALTER TABLE lote ADD COLUMN IF NOT EXISTS excepcion_vida_util VARCHAR(300);
+ALTER TABLE lote ADD COLUMN IF NOT EXISTS excepcion_usuario_id UUID REFERENCES usuario(id) ON DELETE RESTRICT;
+ALTER TABLE lote ALTER COLUMN fecha_ingreso SET DEFAULT (NOW() AT TIME ZONE 'America/Santiago')::date;
+COMMENT ON COLUMN lote.excepcion_vida_util IS 'Motivo por el que se aceptó un lote que vence antes de la vida útil mínima (HU-87). Vacío si cumple.';
+COMMENT ON COLUMN lote.excepcion_usuario_id IS 'Administrador o Jefe de local que aceptó el lote bajo la vida útil mínima.';
+
+-- Restricciones con nombre (HU-88). Se renombran solo si aún tienen el nombre automático.
+DO $$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT * FROM (VALUES
+        ('lote', 'lote_check', 'ck_lote_vencimiento_posterior_ingreso'),
+        ('lote', 'lote_cantidad_recibida_check', 'ck_lote_cantidad_recibida'),
+        ('lote', 'lote_cantidad_actual_check', 'ck_lote_cantidad_actual'),
+        ('lote', 'lote_producto_id_sucursal_id_numero_lote_key', 'uq_lote_producto_sucursal_numero'),
+        ('orden_compra_detalle', 'orden_compra_detalle_cantidad_solicitada_check', 'ck_ocd_cantidad_solicitada'),
+        ('orden_compra_detalle', 'orden_compra_detalle_cantidad_recibida_check', 'ck_ocd_cantidad_recibida'),
+        ('orden_compra_detalle', 'orden_compra_detalle_costo_unitario_check', 'ck_ocd_costo_unitario')
+    ) AS v(tabla, viejo, nuevo) LOOP
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = r.tabla::regclass AND conname = r.viejo)
+           AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = r.tabla::regclass AND conname = r.nuevo) THEN
+            EXECUTE format('ALTER TABLE %I RENAME CONSTRAINT %I TO %I', r.tabla, r.viejo, r.nuevo);
+        END IF;
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_lote_excepcion_motivo') THEN
+        ALTER TABLE lote ADD CONSTRAINT ck_lote_excepcion_motivo
+            CHECK (excepcion_vida_util IS NULL OR LENGTH(BTRIM(excepcion_vida_util)) >= 5);
+    END IF;
+END $$;
+
+-- Plazo vigente (en meses). Si alguien borrara el parámetro, se usan 3.
+CREATE OR REPLACE FUNCTION fn_vida_util_minima_meses() RETURNS INTEGER STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT COALESCE((SELECT valor FROM parametro WHERE clave = 'vida_util_minima_meses'), 3);
+$$ LANGUAGE sql;
+
+-- Regla de la vida útil mínima para los lotes que entran por una orden de compra.
+CREATE OR REPLACE FUNCTION trg_validar_vida_util() RETURNS TRIGGER SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_minima DATE; v_usuario UUID;
+BEGIN
+    IF NEW.orden_compra_detalle_id IS NULL OR NEW.fecha_vencimiento IS NULL THEN RETURN NEW; END IF;
+    v_minima := ((NOW() AT TIME ZONE 'America/Santiago')::date + make_interval(months => fn_vida_util_minima_meses()))::date;
+    IF NEW.fecha_vencimiento >= v_minima THEN
+        NEW.excepcion_vida_util := NULL;
+        NEW.excepcion_usuario_id := NULL;
+        RETURN NEW;
+    END IF;
+    IF NEW.excepcion_vida_util IS NULL THEN
+        RAISE EXCEPTION 'El lote % vence el % y la fecha mínima es el %.', COALESCE(NEW.numero_lote, 'sin número'),
+            to_char(NEW.fecha_vencimiento, 'DD-MM-YYYY'), to_char(v_minima, 'DD-MM-YYYY')
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'ck_lote_vida_util_minima';
+    END IF;
+    v_usuario := NULLIF(current_setting('app.usuario_id', true), '')::uuid;
+    IF v_usuario IS NULL OR NOT EXISTS (
+        SELECT 1 FROM usuario u JOIN rol r ON r.id = u.rol_id
+         WHERE u.id = v_usuario AND u.activo AND r.nombre IN ('Administrador', 'Jefe de local')) THEN
+        RAISE EXCEPTION 'Solo el Administrador o el Jefe de local pueden aceptar un lote bajo la vida útil mínima.'
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'ck_lote_excepcion_autorizada';
+    END IF;
+    NEW.excepcion_usuario_id := v_usuario;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS val_vida_util ON lote;
+CREATE TRIGGER val_vida_util BEFORE INSERT ON lote FOR EACH ROW EXECUTE FUNCTION trg_validar_vida_util();
+
+GRANT INSERT (excepcion_vida_util) ON lote TO app_backend;
+GRANT SELECT (excepcion_vida_util, excepcion_usuario_id) ON lote TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 016 — Tienda en línea: costo de despacho por comuna (HU-78)
+--   * costo_despacho: cuánto cuesta despachar a cada comuna. Lo configura el Administrador; una comuna sin fila (o
+--     inactiva) no tiene despacho.
+--   * pedido.costo_despacho: lo que se cobra por el despacho de ese pedido. Lo fija el servidor al crear el pedido web
+--     según la comuna, nunca el navegador. pedido.total sigue siendo el de los productos (su IVA y su neto no cambian);
+--     lo que se paga en Webpay es total + costo_despacho.
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod). En producción el Administrador
+-- carga los costos desde Pedidos > Costos de despacho antes de anunciar el despacho.
+-- =====================================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS costo_despacho (
+    comuna_id UUID PRIMARY KEY REFERENCES comuna(id) ON DELETE RESTRICT,
+    costo NUMERIC(12,0) NOT NULL CONSTRAINT ck_costo_despacho_costo CHECK (costo >= 0 AND costo <= 100000),
+    activo BOOLEAN DEFAULT TRUE NOT NULL,
+    actualizado_en TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    actualizado_por UUID REFERENCES usuario(id) ON DELETE RESTRICT
+);
+COMMENT ON TABLE costo_despacho IS 'Costo de despacho a domicilio por comuna (HU-78). Sin fila o inactiva = no se despacha a esa comuna.';
+
+ALTER TABLE pedido ADD COLUMN IF NOT EXISTS costo_despacho NUMERIC(12,0) DEFAULT 0 NOT NULL;
+COMMENT ON COLUMN pedido.costo_despacho IS 'Costo del despacho a domicilio (IVA incluido). Se paga junto al total de los productos: total + costo_despacho.';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_pedido_costo_despacho') THEN
+        ALTER TABLE pedido ADD CONSTRAINT ck_pedido_costo_despacho
+            CHECK (costo_despacho >= 0 AND (costo_despacho = 0 OR tipo_entrega = 'despacho'));
+    END IF;
+END $$;
+
+GRANT SELECT, INSERT, UPDATE ON costo_despacho TO app_backend;
+GRANT INSERT (costo_despacho) ON pedido TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 017 — Historial de estados del pedido (HU-76)
+--   * pedido_estado_historial: cada cambio de estado de un pedido (de qué estado a cuál, cuándo y quién). Lo llena un
+--     trigger, así queda registrado aunque el cambio venga de la tienda, de Webpay, de la caja o de un job.
+--   * El usuario se toma de app.usuario_id (lo fija el backend en cada transacción). Vacío = un proceso automático
+--     (por ejemplo, la expiración de pedidos sin pagar con pg_cron).
+--   * Los pedidos que ya existen parten con una fila con su estado actual y la fecha del pedido.
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS pedido_estado_historial (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pedido_id UUID NOT NULL REFERENCES pedido(id) ON DELETE CASCADE,
+    estado_anterior_id UUID REFERENCES estado_pedido(id) ON DELETE RESTRICT,
+    estado_nuevo_id UUID NOT NULL REFERENCES estado_pedido(id) ON DELETE RESTRICT,
+    usuario_id UUID REFERENCES usuario(id) ON DELETE RESTRICT,
+    fecha TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+COMMENT ON TABLE pedido_estado_historial IS 'Cambios de estado de cada pedido con su fecha y usuario (HU-76). Lo llena trg_pedido_estado_historial; no se edita.';
+CREATE INDEX IF NOT EXISTS ix_pedido_estado_historial_pedido ON pedido_estado_historial (pedido_id, fecha);
+
+CREATE OR REPLACE FUNCTION fn_registrar_estado_pedido() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.estado_pedido_id IS NOT DISTINCT FROM OLD.estado_pedido_id THEN
+        RETURN NEW;
+    END IF;
+    INSERT INTO pedido_estado_historial (pedido_id, estado_anterior_id, estado_nuevo_id, usuario_id)
+    VALUES (NEW.id, CASE WHEN TG_OP = 'UPDATE' THEN OLD.estado_pedido_id END, NEW.estado_pedido_id,
+            NULLIF(current_setting('app.usuario_id', true), '')::uuid);
+    RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_pedido_estado_historial ON pedido;
+CREATE TRIGGER trg_pedido_estado_historial
+    AFTER INSERT OR UPDATE OF estado_pedido_id ON pedido
+    FOR EACH ROW EXECUTE FUNCTION fn_registrar_estado_pedido();
+
+-- Pedidos anteriores a esta migración: una fila con su estado actual.
+INSERT INTO pedido_estado_historial (pedido_id, estado_nuevo_id, fecha)
+SELECT p.id, p.estado_pedido_id, p.fecha
+  FROM pedido p
+ WHERE NOT EXISTS (SELECT 1 FROM pedido_estado_historial h WHERE h.pedido_id = p.id);
+
+-- Solo lectura e inserción (la inserción la hace el trigger con el usuario de la API): el historial no se edita.
+GRANT SELECT, INSERT ON pedido_estado_historial TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 018 — Anulación y reembolso por Webpay Plus (HU-80)
+--   * transaccion_reembolso: cada reembolso hecho en Webpay (operación "refunds" de Transbank) sobre un pago
+--     aprobado: monto, tipo que respondió Transbank (REVERSED = reversa el mismo día, NULLIFIED = anulación), su
+--     código de autorización, quién lo pidió y por qué. Si viene de una devolución, queda ligado a ella.
+--   * estado_transaccion 'Reembolsado': el pago se devolvió completo.
+--   * La suma de los reembolsos de un pago no puede pasar de lo pagado (trigger trg_validar_reembolso).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+INSERT INTO estado_transaccion (nombre) VALUES ('Reembolsado') ON CONFLICT (nombre) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS transaccion_reembolso (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transaccion_pago_id UUID NOT NULL REFERENCES transaccion_pago(id) ON DELETE RESTRICT,
+    monto NUMERIC(12,2) NOT NULL CONSTRAINT ck_treembolso_monto CHECK (monto > 0),
+    tipo VARCHAR(12) NOT NULL CONSTRAINT ck_treembolso_tipo CHECK (tipo IN ('REVERSED', 'NULLIFIED')),
+    codigo_autorizacion VARCHAR(50),
+    motivo VARCHAR(300) NOT NULL,
+    devolucion_id UUID REFERENCES devolucion(id) ON DELETE RESTRICT,
+    usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE RESTRICT,
+    fecha TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+COMMENT ON TABLE transaccion_reembolso IS 'Reembolsos hechos en Webpay Plus sobre un pago aprobado (HU-80). No se editan.';
+CREATE INDEX IF NOT EXISTS ix_treembolso_transaccion ON transaccion_reembolso (transaccion_pago_id);
+
+CREATE OR REPLACE FUNCTION fn_validar_reembolso() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE v_pagado NUMERIC; v_previo NUMERIC;
+BEGIN
+    SELECT monto INTO v_pagado FROM transaccion_pago WHERE id = NEW.transaccion_pago_id FOR UPDATE;
+    SELECT COALESCE(SUM(monto), 0) INTO v_previo FROM transaccion_reembolso WHERE transaccion_pago_id = NEW.transaccion_pago_id;
+    IF v_previo + NEW.monto > v_pagado THEN
+        RAISE EXCEPTION 'Los reembolsos (%) superarían lo pagado (%).', v_previo + NEW.monto, v_pagado
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'ck_treembolso_tope';
+    END IF;
+    RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_validar_reembolso ON transaccion_reembolso;
+CREATE TRIGGER trg_validar_reembolso BEFORE INSERT ON transaccion_reembolso
+    FOR EACH ROW EXECUTE FUNCTION fn_validar_reembolso();
+
+GRANT SELECT, INSERT ON transaccion_reembolso TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 019 — Correos al cliente por su pedido web (HU-74 y HU-79)
+--   * correo_pedido: bandeja de salida. Un trigger agrega una fila cuando un pedido de la tienda (canal Online, con
+--     cliente) pasa a "Pagado" (correo con el comprobante PDF, HU-74), "Listo para retiro", "En despacho" o
+--     "Entregado" (aviso de estado, HU-79). La API los envía en segundo plano (tienda/correosPedido.js).
+--   * Si el envío falla, la compra no se revierte: el error queda en ultimo_error y se reintenta hasta 5 veces,
+--     cada vez más espaciado.
+--   * Un pedido recibe a lo más un correo por estado (uq_correo_pedido_estado).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS correo_pedido (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pedido_id UUID NOT NULL REFERENCES pedido(id) ON DELETE CASCADE,
+    estado_pedido_id UUID NOT NULL REFERENCES estado_pedido(id) ON DELETE RESTRICT,
+    creado_en TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    enviado_en TIMESTAMPTZ,
+    intentos SMALLINT DEFAULT 0 NOT NULL,
+    siguiente_intento TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    ultimo_error VARCHAR(300),
+    CONSTRAINT uq_correo_pedido_estado UNIQUE (pedido_id, estado_pedido_id)
+);
+COMMENT ON TABLE correo_pedido IS 'Correos al cliente por su pedido web (HU-74 comprobante, HU-79 cambios de estado). Bandeja de salida con reintentos.';
+CREATE INDEX IF NOT EXISTS ix_correo_pedido_pendientes ON correo_pedido (siguiente_intento) WHERE enviado_en IS NULL;
+
+CREATE OR REPLACE FUNCTION fn_encolar_correo_pedido() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND NEW.estado_pedido_id IS NOT DISTINCT FROM OLD.estado_pedido_id THEN
+        RETURN NEW;
+    END IF;
+    IF NEW.cliente_id IS NULL THEN RETURN NEW; END IF;
+    IF NOT EXISTS (SELECT 1 FROM canal_venta WHERE id = NEW.canal_venta_id AND nombre = 'Online') THEN RETURN NEW; END IF;
+    IF EXISTS (SELECT 1 FROM estado_pedido WHERE id = NEW.estado_pedido_id
+                AND nombre IN ('Pagado', 'Listo para retiro', 'En despacho', 'Entregado')) THEN
+        INSERT INTO correo_pedido (pedido_id, estado_pedido_id) VALUES (NEW.id, NEW.estado_pedido_id)
+        ON CONFLICT ON CONSTRAINT uq_correo_pedido_estado DO NOTHING;
+    END IF;
+    RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_encolar_correo_pedido ON pedido;
+CREATE TRIGGER trg_encolar_correo_pedido
+    AFTER INSERT OR UPDATE OF estado_pedido_id ON pedido
+    FOR EACH ROW EXECUTE FUNCTION fn_encolar_correo_pedido();
+
+GRANT SELECT, INSERT ON correo_pedido TO app_backend;
+GRANT UPDATE (enviado_en, intentos, siguiente_intento, ultimo_error) ON correo_pedido TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 020 — Vida útil mínima para vender en la tienda (HU-93)
+--   * Parámetro vida_util_web_dias (30 por defecto, de 0 a 365): días de vida que debe tener un lote para venderlo a
+--     distancia. Lo edita el Administrador en Pedidos > Despacho.
+--   * fn_reservar_pedido: un pedido sin turno (canal Online) solo reserva lotes que vencen en hoy + ese plazo o
+--     después. La venta en mostrador sigue igual (FEFO desde hoy).
+--   * vw_stock_disponible_web: lo que la tienda puede vender por sucursal con la misma regla. La tienda muestra y
+--     revisa la disponibilidad con esta vista, así no ofrece unidades que la reserva no podría tomar.
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+INSERT INTO parametro (clave, valor, descripcion, minimo, maximo)
+VALUES ('vida_util_web_dias', 30, 'Días de vida que debe tener un lote para venderlo en la tienda en línea.', 0, 365)
+ON CONFLICT (clave) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION fn_vida_util_web_dias() RETURNS INTEGER STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT COALESCE((SELECT valor FROM parametro WHERE clave = 'vida_util_web_dias'), 30);
+$$ LANGUAGE sql;
+
+CREATE OR REPLACE VIEW vw_stock_disponible_web AS
+SELECT l.producto_id, l.sucursal_id, SUM(l.cantidad_actual)::INTEGER AS disponible
+  FROM lote l
+ WHERE l.cantidad_actual > 0
+   AND (l.fecha_vencimiento IS NULL
+        OR l.fecha_vencimiento >= (NOW() AT TIME ZONE 'America/Santiago')::date + fn_vida_util_web_dias())
+ GROUP BY l.producto_id, l.sucursal_id;
+COMMENT ON VIEW vw_stock_disponible_web IS 'Stock que se puede vender a distancia (HU-93): sin lotes que vencen antes de hoy + vida_util_web_dias.';
+
+-- 7.1 Reserva FEFO (misma función de la instalación, con el mínimo para el canal a distancia)
+CREATE OR REPLACE FUNCTION fn_reservar_pedido(p_pedido_id UUID) RETURNS VOID SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_ped RECORD; v_usuario UUID; v_motivo UUID; v_linea RECORD; v_lote RECORD;
+    v_restante INTEGER; v_toma INTEGER; v_hoy DATE := (NOW() AT TIME ZONE 'America/Santiago')::date; v_minimo DATE;
+BEGIN
+    v_usuario := NULLIF(current_setting('app.usuario_id', true), '')::uuid;
+    IF v_usuario IS NULL THEN RAISE EXCEPTION 'Falta app.usuario_id: el movimiento debe quedar a nombre de alguien.'; END IF;
+    SELECT id INTO v_motivo FROM motivo_movimiento WHERE nombre = 'Venta';
+    IF v_motivo IS NULL THEN RAISE EXCEPTION 'Falta el motivo de movimiento "Venta".'; END IF;
+
+    SELECT p.id, p.sucursal_id, cv.requiere_turno INTO v_ped
+      FROM pedido p JOIN canal_venta cv ON cv.id = p.canal_venta_id WHERE p.id = p_pedido_id FOR UPDATE OF p;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Pedido inexistente.'; END IF;
+    IF v_ped.sucursal_id IS NULL THEN RAISE EXCEPTION 'El pedido no tiene sucursal de despacho.'; END IF;
+    IF NOT v_ped.requiere_turno AND NOT (SELECT habilita_venta_web FROM sucursal WHERE id = v_ped.sucursal_id) THEN
+        RAISE EXCEPTION 'La sucursal del pedido online no habilita venta web.'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM detalle_pedido WHERE pedido_id = p_pedido_id) THEN RAISE EXCEPTION 'El pedido no tiene líneas.'; END IF;
+    -- HU-93: un pedido a distancia (canal sin turno, la tienda) no toma lotes que vencen antes de hoy + N días.
+    -- La venta en mostrador sigue con FEFO desde hoy: el cliente ve el producto antes de llevarlo.
+    v_minimo := CASE WHEN v_ped.requiere_turno THEN v_hoy ELSE v_hoy + fn_vida_util_web_dias() END;
+
+    IF COALESCE((SELECT SUM(m.cantidad * t.signo) FROM movimiento_inventario m
+                   JOIN motivo_movimiento mm ON mm.id = m.motivo_movimiento_id
+                   JOIN tipo_movimiento t ON t.id = mm.tipo_movimiento_id
+                  WHERE m.pedido_id = p_pedido_id), 0) <> 0 THEN
+        RAISE EXCEPTION 'El pedido ya tiene stock reservado.'; END IF;
+
+    FOR v_linea IN SELECT producto_id, SUM(cantidad)::INTEGER AS cantidad FROM detalle_pedido
+                    WHERE pedido_id = p_pedido_id GROUP BY producto_id ORDER BY producto_id LOOP
+        PERFORM 1 FROM producto WHERE id = v_linea.producto_id FOR UPDATE;   -- orden: producto -> lotes
+        v_restante := v_linea.cantidad;
+        FOR v_lote IN SELECT id, cantidad_actual FROM lote
+                       WHERE producto_id = v_linea.producto_id AND sucursal_id = v_ped.sucursal_id
+                         AND cantidad_actual > 0 AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= v_minimo)
+                       ORDER BY fecha_vencimiento ASC NULLS LAST, id ASC FOR UPDATE LOOP
+            EXIT WHEN v_restante = 0;
+            v_toma := LEAST(v_lote.cantidad_actual, v_restante);
+            INSERT INTO movimiento_inventario (producto_id, sucursal_id, cantidad, motivo_movimiento_id, lote_id, usuario_id, pedido_id)
+            VALUES (v_linea.producto_id, v_ped.sucursal_id, v_toma, v_motivo, v_lote.id, v_usuario, p_pedido_id);
+            v_restante := v_restante - v_toma;
+        END LOOP;
+        IF v_restante > 0 THEN RAISE EXCEPTION 'Stock insuficiente para el producto %', v_linea.producto_id; END IF;
+    END LOOP;
+END; $$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION fn_vida_util_web_dias() TO app_backend;
+GRANT SELECT ON vw_stock_disponible_web TO app_backend;
+
+COMMIT;
+
+-- =====================================================================
+-- 021 — Fotos reales de los productos (HU-96)
+--   * La foto se sube desde el sistema (Productos) y se guarda en Supabase Storage, bucket público "productos"
+--     (lo crea la API la primera vez). producto.imagen_url queda con la dirección https pública del archivo.
+--   * En el Docker de desarrollo, sin Supabase, la API guarda la foto en su disco y la sirve en /api/fotos/...:
+--     la restricción acepta también esa dirección relativa. Ninguna otra forma (http://, javascript:, data:).
+-- Idempotente. Ejecutar en el editor SQL de Supabase (primero dev, después prod).
+-- =====================================================================
+BEGIN;
+
+ALTER TABLE producto DROP CONSTRAINT IF EXISTS ck_producto_imagen_https;
+ALTER TABLE producto ADD CONSTRAINT ck_producto_imagen_https
+    CHECK (imagen_url IS NULL OR imagen_url ~ '^https://[^[:space:]]+$' OR imagen_url ~ '^/api/fotos/[^[:space:]]+$');
+COMMENT ON COLUMN producto.imagen_url IS 'Foto del producto para la tienda (HU-67, HU-96): dirección https (Supabase Storage) o /api/fotos/... en desarrollo local. Opcional.';
+
+COMMIT;

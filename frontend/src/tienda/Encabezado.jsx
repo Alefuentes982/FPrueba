@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import logo from '../assets/farmaclick-logo.svg';
 import { useCarrito } from './CarritoContext.jsx';
+import { textoCosto, useComunaDespacho } from './ComunaDespacho.jsx';
 import { primerNombre, useCuenta } from './CuentaContext.jsx';
 import { FARMACIA, FUNCIONES } from './contenido.js';
 import { enlaceCategoria, useDatosTienda } from './DatosTienda.jsx';
@@ -16,6 +17,7 @@ export default function Encabezado() {
   const { categorias, sucursales } = useDatosTienda();
   const { unidades } = useCarrito();
   const { cliente } = useCuenta();
+  const { comuna, abrirSelector } = useComunaDespacho();
   const [texto, setTexto] = useState(params.get('q') ?? '');
   const [panel, setPanel] = useState(false);
 
@@ -54,6 +56,12 @@ export default function Encabezado() {
             </span>
           </span>
           <nav aria-label="Ayuda">
+            {FUNCIONES.despacho && (
+              <button type="button" className="fct-util-comuna" onClick={abrirSelector} aria-haspopup="dialog">
+                <i className="bi bi-geo-alt" aria-hidden="true" />
+                <span>{comuna ? <><span className="fct-util-comuna-prefijo">Despacho a </span><b>{comuna.nombre}</b>: {textoCosto(comuna)}</> : 'Elige tu comuna de despacho'}</span>
+              </button>
+            )}
             <span><i className="bi bi-clock" aria-hidden="true" />{FARMACIA.horarioCorto}</span>
             {FARMACIA.ventaTelefonica && <a href={`tel:${FARMACIA.ventaTelefonica.replace(/\s/g, '')}`}>Venta telefónica</a>}
             {FUNCIONES.seguimiento && <Link to="/tienda/pedido">Sigue tu pedido</Link>}

@@ -4,6 +4,7 @@ import cors from 'cors';
 import { autenticar, exigeModulo } from './core/auth.js';
 import { routerCatalogos } from './core/catalogos.js';
 import { errorHandler, HttpError } from './core/errors.js';
+import { almacen, DIR_LOCAL } from './core/fotos.js';
 import { ipDesdeWorker } from './core/ipCliente.js';
 import { pool } from './core/db.js';
 import modulos from './modules/index.js';
@@ -22,6 +23,9 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/health/db', async (_req, res, next) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true }); } catch (err) { next(err); }
 });
+
+// Fotos de productos guardadas en el disco (HU-96): solo en desarrollo local; en dev y producción están en Supabase.
+if (almacen() === 'local') app.use('/api/fotos', express.static(DIR_LOCAL, { maxAge: '7d' }));
 
 // Cada módulo exige sesión y su permiso (rol_permiso), salvo los públicos.
 for (const m of modulos) {

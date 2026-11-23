@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, qs } from '../../api.js';
+import { useAuth } from '../../AuthContext.jsx';
 import { fechaCorta, money, soloFecha } from '../../format.js';
 import { descargarArchivo } from '../../archivos.js';
 import FiltroFechas from '../../components/FiltroFechas.jsx';
@@ -31,6 +32,7 @@ export default function OrdenesCompra() {
       <PageHeader title="Órdenes de compra">
         <Link to="/ordenes-compra/nueva" className="btn btn-primary"><i className="bi bi-plus-lg me-1" />Nueva orden</Link>
       </PageHeader>
+      <VidaUtilMinima />
       <Filtros>
         <form className="row g-2" onSubmit={(e) => { e.preventDefault(); setPage(1); setBusqueda(q); }}>
           <div className="col-md-6"><input className="form-control" placeholder="Buscar por N° (OC-000123) o proveedor" value={q} onChange={(e) => setQ(e.target.value)} /></div>
@@ -83,5 +85,57 @@ export default function OrdenesCompra() {
         </>
       )}
     </>
+  );
+}
+
+// Vida útil mínima de los lotes que se reciben (HU-87). Todos la ven; solo el Administrador la cambia.
+function VidaUtilMinima() {
+  const { user } = useAuth();
+  const { data, error, reload } = useAsync(() => api.get('/ordenes-compra/parametros/vida-util'), []);
+  const [editando, setEditando] = useState(false);
+  const [meses, setMeses] = useState('');
+  const [guardarError, setGuardarError] = useState(null);
+  const [guardando, setGuardando] = useState(false);
+  if (error || !data) return null;
+  const esAdmin = user?.rol === 'Administrador';
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    setGuardando(true); setGuardarError(null);
+    try {
+      await api.put('/ordenes-compra/parametros/vida-util', { meses: Number(meses) });
+      setEditando(false);
+      reload();
+    } catch (err) {
+      setGuardarError(err);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2" role="status">
+      <i className="bi bi-calendar2-check" aria-hidden="true" />
+      {editando ? (
+        <form className="d-flex flex-wrap align-items-center gap-2" onSubmit={guardar}>
+          <label htmlFor="vida-util-meses" className="mb-0">Vida útil mínima al recibir:</label>
+          <input id="vida-util-meses" type="number" min="0" max="24" className={`form-control form-control-sm${guardarError ? ' is-invalid' : ''}`}
+            style={{ width: 90 }} value={meses} onChange={(e) => setMeses(e.target.value)} required />
+          <span>meses</span>
+          <button className="btn btn-sm btn-primary" disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setEditando(false)}>Cancelar</button>
+          {guardarError && <span className="text-danger small">{guardarError.details?.[0]?.message ?? guardarError.message}</span>}
+        </form>
+      ) : (
+        <>
+          <span>Los lotes que se reciben deben vencer en <strong>{data.meses} {Number(data.meses) === 1 ? 'mes' : 'meses'}</strong> o más (hoy: desde el {soloFecha(data.fecha_minima)}).</span>
+          {esAdmin && (
+            <button type="button" className="btn btn-sm btn-outline-primary ms-auto" onClick={() => { setMeses(String(data.meses)); setEditando(true); }}>
+              <i className="bi bi-pencil me-1" />Cambiar
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }

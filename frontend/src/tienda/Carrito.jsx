@@ -7,6 +7,7 @@ import { Aviso, Cargando, ImagenProducto, SelectorCantidad } from './comunes.jsx
 import { MAX_CANTIDAD } from './carrito.js';
 import { useCuenta } from './CuentaContext.jsx';
 import { FUNCIONES } from './contenido.js';
+import { textoCosto, useComunaDespacho } from './ComunaDespacho.jsx';
 import { useDatosTienda } from './DatosTienda.jsx';
 
 const MENSAJE = {
@@ -75,12 +76,7 @@ export default function Carrito() {
               <i className="bi bi-shop" aria-hidden="true" />
               <div><b>Retiro en {matriz ? matriz.nombre : 'la farmacia'}</b><span>Sin costo{matriz?.comuna ? ` · ${matriz.comuna}` : ''}</span></div>
             </div>
-            {FUNCIONES.despacho && (
-              <div>
-                <i className="bi bi-truck" aria-hidden="true" />
-                <div><b>Despacho a domicilio</b><span>Lo eliges en el paso siguiente</span></div>
-              </div>
-            )}
+            {FUNCIONES.despacho && <EntregaDespacho />}
           </div>
 
           {error && <Aviso error={error} />}
@@ -134,6 +130,21 @@ export default function Carrito() {
           </p>
           <Link to="/tienda/productos" className="fct-seguir">Seguir comprando</Link>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+// Opción de despacho del carro con el costo de la comuna elegida (HU-78). Se confirma en el paso siguiente.
+function EntregaDespacho() {
+  const { comuna, abrirSelector } = useComunaDespacho();
+  return (
+    <div>
+      <i className="bi bi-truck" aria-hidden="true" />
+      <div>
+        <b>Despacho a domicilio</b>
+        <span>{comuna ? `${comuna.nombre}: ${textoCosto(comuna)}` : 'Lo eliges en el paso siguiente'}</span>
+        <button type="button" className="fct-enlace" onClick={abrirSelector}>{comuna ? 'Cambiar comuna' : 'Ver costo por comuna'}</button>
       </div>
     </div>
   );

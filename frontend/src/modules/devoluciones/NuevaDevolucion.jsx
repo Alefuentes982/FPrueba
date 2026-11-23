@@ -166,7 +166,8 @@ export default function NuevaDevolucion() {
                     <p className="small text-muted">Se devuelve por los mismos medios con que se pagó, sin pasar de lo pagado con cada uno.</p>
                     {p.medios.map((m) => (
                       <div className="row g-2 align-items-center mb-2" key={m.medio_pago_id}>
-                        <div className="col-4">{m.medio_pago}<div className="small text-muted">disponible {money(m.disponible)}</div></div>
+                        <div className="col-4">{m.medio_pago}<div className="small text-muted">disponible {money(m.disponible)}</div>
+                          {m.medio_pago === 'Webpay Plus' && <div className="small text-primary">Se reembolsa en Webpay al registrar</div>}</div>
                         <div className="col-8">
                           <input type="number" min="0" step="1" max={m.disponible} className="form-control" disabled={m.disponible <= 0}
                             value={reembolsos[m.medio_pago_id] ?? ''} onChange={(e) => setReembolsos((r) => ({ ...r, [m.medio_pago_id]: e.target.value }))} />

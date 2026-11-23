@@ -1,6 +1,7 @@
 // Consultas de la tienda en línea. Solo leen: la tienda no crea pedidos hasta el checkout (HU-71, Sprint 6).
 // Nunca se seleccionan costo ni margen. El catálogo sale de vw_catalogo_web (productos activos de venta directa) y
-// la disponibilidad de vw_stock_disponible (sin lotes vencidos), sumando solo las sucursales que venden en línea.
+// la disponibilidad de vw_stock_disponible_web (sin lotes que vencen antes de la vida útil mínima de la tienda, HU-93),
+// sumando solo las sucursales que venden en línea.
 import { notFound } from '../../core/errors.js';
 import { likeParam } from '../../core/sql.js';
 import { cotizar } from '../pedidos/servicio.js';
@@ -10,7 +11,7 @@ import { descuentoVisible, estadoLinea, ordenSql, totalesCarrito, unirLineas } f
 const DISPONIBLE_WEB = `
   disponible_web AS (
     SELECT sd.producto_id, SUM(sd.disponible)::int AS disponible
-      FROM vw_stock_disponible sd
+      FROM vw_stock_disponible_web sd
       JOIN sucursal s ON s.id = sd.sucursal_id AND s.activa AND s.habilita_venta_web
      GROUP BY sd.producto_id
   )`;
@@ -28,13 +29,24 @@ export async function sucursalesWeb(db) {
 }
 
 // Regiones con sus comunas, para los formularios de la cuenta y del despacho. Solo regiones que tienen comunas cargadas.
+// Cada comuna trae su costo de despacho (HU-78): null si no se despacha a ella.
 export async function listarComunas(db) {
   const { rows } = await db.query(
-    `SELECT r.id, r.nombre, json_agg(json_build_object('id', c.id, 'nombre', c.nombre) ORDER BY c.nombre) AS comunas
+    `SELECT r.id, r.nombre,
+            json_agg(json_build_object('id', c.id, 'nombre', c.nombre,
+                                       'costo_despacho', CASE WHEN cd.activo THEN cd.costo END) ORDER BY c.nombre) AS comunas
        FROM region r JOIN comuna c ON c.region_id = r.id
+       LEFT JOIN costo_despacho cd ON cd.comuna_id = c.id
       GROUP BY r.id, r.nombre
       ORDER BY r.nombre`);
-  return rows;
+  return rows.map((r) => ({ ...r, comunas: r.comunas.map((c) => ({ ...c, costo_despacho: c.costo_despacho == null ? null : Number(c.costo_despacho) })) }));
+}
+
+// Costo de despacho vigente a una comuna (HU-78). null si no se despacha a ella.
+export async function costoDespacho(db, comunaId) {
+  if (!comunaId) return null;
+  const { rows } = await db.query('SELECT costo FROM costo_despacho WHERE comuna_id = $1 AND activo', [comunaId]);
+  return rows[0] ? Number(rows[0].costo) : null;
 }
 
 // Unidades vendidas por producto en los últimos 90 días (orden "Más vendidos"). No cuenta pedidos sin pagar,
@@ -144,7 +156,7 @@ export async function fichaProducto(db, id) {
     `SELECT s.id, s.nombre, s.direccion, co.nombre AS comuna, COALESCE(sd.disponible, 0)::int AS disponible
        FROM sucursal s
        JOIN comuna co ON co.id = s.comuna_id
-       LEFT JOIN vw_stock_disponible sd ON sd.sucursal_id = s.id AND sd.producto_id = $1
+       LEFT JOIN vw_stock_disponible_web sd ON sd.sucursal_id = s.id AND sd.producto_id = $1
       WHERE s.activa AND s.habilita_venta_web
       ORDER BY s.nombre`, [id]);
 

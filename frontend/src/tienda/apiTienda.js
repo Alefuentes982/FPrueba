@@ -72,7 +72,22 @@ export const pedidosApi = {
   crear: (datos) => pedirConSesion('/pedidos', { method: 'POST', body: datos }),
   ver: (id) => pedirConSesion(`/pedidos/${id}`),
   cancelar: (id) => pedirConSesion(`/pedidos/${id}/cancelar`, { method: 'POST' }),
+  // Mis pedidos (HU-75).
+  listar: (page = 1) => pedirConSesion(`/pedidos${qs({ page, limit: 10 })}`),
+  comprobante: (id) => pedirConSesion(`/pedidos/${id}/comprobante`),
 };
+
+// Descarga el comprobante PDF de un pedido propio. Llega como JSON { archivo, tipo, base64 } (ver archivos.js).
+export async function descargarComprobante(id) {
+  const { archivo, tipo, base64 } = await pedidosApi.comprobante(id);
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: tipo }));
+  const enlace = Object.assign(document.createElement('a'), { href: url, download: archivo });
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 // Pago con Webpay Plus (HU-72). Devuelve { url, token } para enviar el navegador a Webpay.
 export const pagosApi = {

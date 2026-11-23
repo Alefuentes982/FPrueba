@@ -51,3 +51,7 @@ export const confirmarTransaccion = (token) => llamar('PUT', `/${encodeURICompon
 
 // Estado de una transacción (sirve si el commit no respondió).
 export const estadoTransaccion = (token) => llamar('GET', `/${encodeURIComponent(token)}`);
+
+// Reembolso (HU-80): anula o reversa todo o parte de un pago confirmado. Transbank responde type REVERSED (reversa
+// el mismo día, sin código) o NULLIFIED (anulación con authorization_code y el saldo que queda en balance).
+export const reembolsarTransaccion = (token, monto) => llamar('POST', `/${encodeURIComponent(token)}/refunds`, { amount: monto });

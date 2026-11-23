@@ -16,15 +16,20 @@ export function useAsync(fn, deps) {
   return { ...state, reload: run };
 }
 
+// Error de la API para un campo (details[].path, HU-88). Ej.: errorCampo(error, 'items.2.fecha_vencimiento').
+export const errorCampo = (error, path) => error?.details?.find((d) => d.path === path)?.message ?? null;
+
 export function ErrorAlert({ error, onClose }) {
   if (!error) return null;
+  // Los mensajes por línea (items.N.campo) ya nombran el producto y se marcan en su fila: no se repite la ruta técnica.
+  const detalles = (error.details ?? []).filter((d) => d.message !== error.message);
   return (
     <div className="alert alert-danger d-flex justify-content-between" role="alert">
       <div>
         {error.message}
-        {error.details?.length > 0 && (
+        {detalles.length > 0 && (
           <ul className="mb-0 mt-1">
-            {error.details.map((d, i) => <li key={i}>{d.path ? `${d.path}: ` : ''}{d.message}</li>)}
+            {detalles.map((d, i) => <li key={i}>{d.path && !/^items\.\d+\./.test(d.path) ? `${d.path}: ` : ''}{d.message}</li>)}
           </ul>
         )}
       </div>
